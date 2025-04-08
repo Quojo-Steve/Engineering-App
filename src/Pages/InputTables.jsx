@@ -10,7 +10,6 @@ const InputTables = () => {
   const { numJoints, numIterations } = state || {};
   const navigate = useNavigate();
 
-  // State for current step and form data
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     joints: Array.from({ length: numJoints }, (_, i) => ({
@@ -19,16 +18,15 @@ const InputTables = () => {
       connections: [],
     })),
     supports: Array.from({ length: numJoints }, () => "Fixed"),
-    momentsOfInertia: [], // Will be populated based on connections
-    spans: [], // Will be populated based on connections
+    momentsOfInertia: [],
+    spans: [],
+    loads: [],
   });
 
-  // Handle joint changes (updated for bidirectional connections with max 2 connections)
+  // Handlers (unchanged)
   const handleJointChange = (index, field, value) => {
     const updatedJoints = [...formData.joints];
-
     if (field === "label") {
-      // Check for duplicate labels
       const labelExists = updatedJoints.some(
         (joint, i) => i !== index && joint.label === value.toUpperCase()
       );
@@ -40,10 +38,7 @@ const InputTables = () => {
     } else if (field === "connections") {
       const currentJoint = updatedJoints[index];
       const targetJoint = updatedJoints.find((joint) => joint.label === value);
-
-      if (!targetJoint) return; // Safety check
-
-      // Check if the current joint already has 2 connections
+      if (!targetJoint) return;
       if (
         currentJoint.connections.length >= 2 &&
         !currentJoint.connections.includes(value)
@@ -51,8 +46,6 @@ const InputTables = () => {
         alert("Each joint can connect to a maximum of 2 other joints.");
         return;
       }
-
-      // Check if the target joint already has 2 connections
       if (
         targetJoint.connections.length >= 2 &&
         !targetJoint.connections.includes(currentJoint.label)
@@ -60,8 +53,6 @@ const InputTables = () => {
         alert(`Joint ${targetJoint.label} already has 2 connections.`);
         return;
       }
-
-      // Update current joint's connections
       if (currentJoint.connections.includes(value)) {
         currentJoint.connections = currentJoint.connections.filter(
           (conn) => conn !== value
@@ -69,8 +60,6 @@ const InputTables = () => {
       } else {
         currentJoint.connections.push(value);
       }
-
-      // Update the target joint's connections (bidirectional)
       if (targetJoint.connections.includes(currentJoint.label)) {
         targetJoint.connections = targetJoint.connections.filter(
           (conn) => conn !== currentJoint.label
@@ -79,7 +68,6 @@ const InputTables = () => {
         targetJoint.connections.push(currentJoint.label);
       }
     }
-
     setFormData({ ...formData, joints: updatedJoints });
   };
 
@@ -101,11 +89,15 @@ const InputTables = () => {
     setFormData({ ...formData, spans: updatedSpans });
   };
 
-  // Helper function to get connected pairs of joints
+  const handleLoadChange = (index, field, value) => {
+    const updatedLoads = [...formData.loads];
+    updatedLoads[index][field] = value;
+    setFormData({ ...formData, loads: updatedLoads });
+  };
+
   const getConnectedPairs = () => {
     const pairs = [];
     const visited = new Set();
-
     formData.joints.forEach((joint) => {
       joint.connections.forEach((conn) => {
         const pairKey = [joint.label, conn].sort().join("-");
@@ -119,11 +111,98 @@ const InputTables = () => {
         }
       });
     });
-
     return pairs;
   };
 
-  // Navigation between steps
+  const calculateStiffnessFactors = () => {
+    const stiffnessFactors = formData.spans.map((span, index) => {
+      const fromJointIndex = formData.joints.findIndex(j => j.label === span.from);
+      const toJointIndex = formData.joints.findIndex(j => j.label === span.to);
+      const fromSupport = formData.supports[fromJointIndex];
+      const toSupport = formData.supports[toJointIndex];
+      const inertia = parseFloat(formData.momentsOfInertia[index].value);
+      const length = parseFloat(span.value);
+
+      let factor;
+      if (fromSupport === "Fixed" || toSupport === "Fixed") {
+        factor = (4 * inertia) / length;
+      } else {
+        factor = (3 * inertia) / length;
+      }
+
+      return {
+        from: span.from,
+        to: span.to,
+        value: factor,
+      };
+    });
+
+    return stiffnessFactors;
+  };
+
+  const calculateDistributionFactors = (stiffnessFactors) => {
+    const distributionFactors = [];
+    const totalStiffnessAtJoint = {};
+    formData.joints.forEach(joint => {
+      totalStiffnessAtJoint[joint.label] = 0;
+    });
+
+    stiffnessFactors.forEach(sf => {
+      totalStiffnessAtJoint[sf.from] += sf.value;
+      totalStiffnessAtJoint[sf.to] += sf.value;
+    });
+
+    formData.joints.forEach((joint, index) => {
+      const supportType = formData.supports[index];
+      joint.connections.forEach(toLabel => {
+        let dfFromTo;
+        if (supportType === "Fixed") {
+          dfFromTo = 0;
+        } else if ((supportType === "Roller" || supportType === "Pin") && joint.connections.length === 1) {
+          dfFromTo = 1;
+        } else {
+          const stiffness = stiffnessFactors.find(sf => 
+            (sf.from === joint.label && sf.to === toLabel) || 
+            (sf.to === joint.label && sf.from === toLabel)
+          ).value;
+          dfFromTo = stiffness / totalStiffnessAtJoint[joint.label];
+        }
+
+        distributionFactors.push({
+          from: joint.label,
+          to: toLabel,
+          value: dfFromTo,
+        });
+      });
+    });
+
+    return distributionFactors;
+  };
+
+  // New function to calculate Fixed End Moments
+  const calculateFixedEndMoments = () => {
+    const fixedEndMoments = formData.loads.map((load, index) => {
+      const length = parseFloat(formData.spans[index].value);
+      const weight = parseFloat(load.value);
+      let fem;
+
+      if (load.type === "Distributed") { // UDL
+        fem = (weight * length * length) / 12;
+      } else if (load.type === "Point") { // PL
+        fem = (weight * length) / 8;
+      }
+
+      return {
+        from: load.from,
+        to: load.to,
+        femFromTo: -fem,  // Negative at 'from' end (convention: counterclockwise)
+        femToFrom: fem,   // Positive at 'to' end (convention: clockwise)
+      };
+    });
+
+    return fixedEndMoments;
+  };
+
   const nextStep = () => {
     if (step === 1) {
       const allLabelsFilled = formData.joints.every((joint) => joint.label);
@@ -145,17 +224,33 @@ const InputTables = () => {
         alert("Please provide a length for each span.");
         return;
       }
-      navigate("/results", { state: { formData, numIterations } });
+    } else if (step === 5) {
+      const allLoadsFilled = formData.loads.every(
+        (load) => load.type && load.value
+      );
+      if (!allLoadsFilled) {
+        alert("Please provide a load type and value for each span.");
+        return;
+      }
+      const stiffnessFactors = calculateStiffnessFactors();
+      const distributionFactors = calculateDistributionFactors(stiffnessFactors);
+      const fixedEndMoments = calculateFixedEndMoments();
+      navigate("/results", { 
+        state: { 
+          formData: { ...formData, stiffnessFactors, distributionFactors, fixedEndMoments }, 
+          numIterations 
+        } 
+      });
       return;
     }
 
-    // When moving to step 3 or 4, populate momentsOfInertia and spans based on connections
     if (step === 2) {
       const connectedPairs = getConnectedPairs();
       setFormData((prev) => ({
         ...prev,
         momentsOfInertia: connectedPairs,
-        spans: connectedPairs.map((pair) => ({ ...pair })), // Clone for spans
+        spans: connectedPairs.map((pair) => ({ ...pair })),
+        loads: connectedPairs.map((pair) => ({ ...pair, type: "Point", value: "" })),
       }));
     }
 
@@ -166,78 +261,91 @@ const InputTables = () => {
     if (step > 1) setStep(step - 1);
   };
 
-  // Step 1: Joint Form (Updated to reflect bidirectional connections with max 2 connections)
-  const renderJointForm = () => (
-    <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
-      <h3 className="text-xl font-semibold text-blue-500 mb-4">Joint Names</h3>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border border-gray-600">
-          <thead>
-            <tr className="bg-gray-700">
-              <th className="p-3 text-gray-300">Joint Number</th>
-              <th className="p-3 text-gray-300">Alphabetic Label</th>
-              <th className="p-3 text-gray-300">Node Connection</th>
-            </tr>
-          </thead>
-          <tbody>
-            {formData.joints.map((joint, index) => (
-              <tr key={index} className="border-t border-gray-600">
-                <td className="p-3">{joint.jointNumber}</td>
-                <td className="p-3">
-                  <input
-                    type="text"
-                    value={joint.label}
-                    onChange={(e) =>
-                      handleJointChange(index, "label", e.target.value)
-                    }
-                    className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="e.g., A"
-                    maxLength="1"
-                    required
-                  />
-                </td>
-                <td className="p-3 flex space-x-2">
-                  {formData.joints
-                    .filter((_, i) => i !== index)
-                    .map((otherJoint) => (
-                      <label
-                        key={otherJoint.jointNumber}
-                        className="flex items-center"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={joint.connections.includes(otherJoint.label)}
-                          onChange={() =>
-                            handleJointChange(
-                              index,
-                              "connections",
-                              otherJoint.label
-                            )
-                          }
-                          className="mr-1"
-                          disabled={!joint.label || !otherJoint.label}
-                        />
-                        {otherJoint.label || `Joint ${otherJoint.jointNumber}`}
-                      </label>
-                    ))}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
+  // Render functions (unchanged)
+  const renderJointForm = () => {
+    const getJointLabel = (index, totalJoints) => {
+      if (index === 0) return "Start Joint";
+      if (index === totalJoints - 1) return "End Joint";
+      const num = index + 1;
+      let suffix = "th";
+      if (num === 1) suffix = "st";
+      else if (num === 2) suffix = "nd";
+      else if (num === 3) suffix = "rd";
+      return `${num}${suffix} Joint`;
+    };
 
-  // Step 2: Support Type Table
+    return (
+      <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
+        <h3 className="text-xl font-semibold text-blue-500 mb-4">Joint Names</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border border-gray-600">
+            <thead>
+              <tr className="bg-gray-700">
+                <th className="p-3 text-gray-300">Joint</th>
+                <th className="p-3 text-gray-300">Alphabetic Label</th>
+                <th className="p-3 text-gray-300">Node Connection</th>
+              </tr>
+            </thead>
+            <tbody>
+              {formData.joints.map((joint, index) => (
+                <tr key={index} className="border-t border-gray-600">
+                  <td className="p-3">
+                    {getJointLabel(index, formData.joints.length)}
+                  </td>
+                  <td className="p-3">
+                    <input
+                      type="text"
+                      value={joint.label}
+                      onChange={(e) =>
+                        handleJointChange(index, "label", e.target.value)
+                      }
+                      className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="e.g., A"
+                      maxLength="1"
+                      required
+                    />
+                  </td>
+                  <td className="p-3 flex space-x-2">
+                    {formData.joints
+                      .filter((_, i) => i !== index)
+                      .map((otherJoint) => (
+                        <label
+                          key={otherJoint.jointNumber}
+                          className="flex items-center"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={joint.connections.includes(otherJoint.label)}
+                            onChange={() =>
+                              handleJointChange(
+                                index,
+                                "connections",
+                                otherJoint.label
+                              )
+                            }
+                            className="mr-1"
+                            disabled={!joint.label || !otherJoint.label}
+                          />
+                          {otherJoint.label || `Joint ${otherJoint.jointNumber}`}
+                        </label>
+                      ))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
   const renderSupportForm = () => {
-    // Mapping of support types to image URLs
     const supportImages = {
       Fixed: fixImg,
       Roller: rollerImg,
       Pin: pinImg,
     };
-  
+
     return (
       <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
         <h3 className="text-xl font-semibold text-blue-500 mb-4">Support Types</h3>
@@ -286,7 +394,6 @@ const InputTables = () => {
     );
   };
 
-  // Step 3: Moment of Inertia Form (Updated to be between connected joints)
   const renderMomentForm = () => (
     <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
       <h3 className="text-xl font-semibold text-blue-500 mb-4">
@@ -323,7 +430,6 @@ const InputTables = () => {
     </div>
   );
 
-  // Step 4: Length of Span Form (Updated to be between connected joints)
   const renderSpanForm = () => (
     <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
       <h3 className="text-xl font-semibold text-blue-500 mb-4">
@@ -360,16 +466,60 @@ const InputTables = () => {
     </div>
   );
 
+  const renderLoadForm = () => (
+    <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
+      <h3 className="text-xl font-semibold text-blue-500 mb-4">Loads on Spans</h3>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border border-gray-600">
+          <thead>
+            <tr className="bg-gray-700">
+              <th className="p-3 text-gray-300">Span Between</th>
+              <th className="p-3 text-gray-300">Load Type</th>
+              <th className="p-3 text-gray-300">Load Value (kN or kN/m)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {formData.loads.map((load, index) => (
+              <tr key={index} className="border-t border-gray-600">
+                <td className="p-3">{`${load.from} - ${load.to}`}</td>
+                <td className="p-3">
+                  <select
+                    value={load.type}
+                    onChange={(e) => handleLoadChange(index, "type", e.target.value)}
+                    className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="Point">Point Load (kN)</option>
+                    <option value="Distributed">Uniform Distributed Load (kN/m)</option>
+                  </select>
+                </td>
+                <td className="p-3">
+                  <input
+                    type="number"
+                    value={load.value}
+                    onChange={(e) => handleLoadChange(index, "value", e.target.value)}
+                    className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., 10"
+                    min="0"
+                    required
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
       <div className="max-w-4xl mx-auto">
         <Link to={"/configuration"}>{`< Configurations`}</Link>
-        {/* Step Indicator */}
         <div className="flex justify-between mb-6">
-          {[1, 2, 3, 4].map((s) => (
+          {[1, 2, 3, 4, 5].map((s) => (
             <div
               key={s}
-              className={`w-1/4 text-center py-2 rounded ${
+              className={`w-1/5 text-center py-2 rounded ${
                 step >= s ? "bg-blue-600" : "bg-gray-700"
               }`}
             >
@@ -378,13 +528,12 @@ const InputTables = () => {
           ))}
         </div>
 
-        {/* Form Content */}
         {step === 1 && renderJointForm()}
         {step === 2 && renderSupportForm()}
         {step === 3 && renderMomentForm()}
         {step === 4 && renderSpanForm()}
+        {step === 5 && renderLoadForm()}
 
-        {/* Navigation Buttons */}
         <div className="flex justify-between mt-6">
           <button
             onClick={prevStep}
@@ -401,7 +550,7 @@ const InputTables = () => {
             onClick={nextStep}
             className="py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition duration-300"
           >
-            {step === 4 ? "Submit" : "Next"}
+            {step === 5 ? "Submit" : "Next"}
           </button>
         </div>
       </div>

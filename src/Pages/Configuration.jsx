@@ -38,7 +38,7 @@ const Configuration = () => {
                 htmlFor="numJoints"
                 className="block text-sm font-medium text-gray-400 mb-1"
               >
-                Number of Joints <span className='text-gray-500 font-light text-xs'>(not more than 10)</span>
+                Number of Joints <span className='text-gray-500 font-light text-xs'>(not more than 11)</span>
               </label>
               <input
                 type="number"
@@ -46,7 +46,7 @@ const Configuration = () => {
                 value={numJoints}
                 onChange={(e) => setNumJoints(e.target.value)}
                 min="2" // Minimum 2 joints for a meaningful structure
-                max={10}
+                max={11}
                 className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="e.g., 3"
                 required
