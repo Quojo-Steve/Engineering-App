@@ -5,11 +5,210 @@ const Results = () => {
   const { state } = useLocation();
   const { formData, numIterations } = state || {};
 
+  if (!formData || !numIterations) {
+    return <div className="min-h-screen bg-gray-900 text-white p-6">No data available.</div>;
+  }
+
+  const { joints, stiffnessFactors, distributionFactors, fixedEndMoments } = formData;
+
+  // Prepare members (e.g., AB, BA, BC, CB)
+  const members = [];
+  joints.forEach(joint => {
+    joint.connections.forEach(toLabel => {
+      members.push(`${joint.label}${toLabel}`); // e.g., AB
+      members.push(`${toLabel}${joint.label}`); // e.g., BA
+    });
+  });
+  const uniqueMembers = [...new Set(members)].sort();
+
+  // Initialize moment distribution table
+  const initialMoments = {};
+  uniqueMembers.forEach(member => {
+    const from = member[0];
+    const to = member[1];
+    const fem = fixedEndMoments.find(fem => fem.from === from && fem.to === to);
+    initialMoments[member] = fem ? (member === `${fem.from}${fem.to}` ? fem.femFromTo : fem.femToFrom) : 0;
+  });
+
+  // Carry-over factor (0.5 for middle joints, 0 for fixed/roller ends unless adjusted)
+  const carryOverFactors = {};
+  joints.forEach((joint, index) => {
+    const supportType = formData.supports[index];
+    const isEndJoint = joint.connections.length === 1;
+    joint.connections.forEach(toLabel => {
+      const member = `${joint.label}${toLabel}`;
+      if (supportType === "Fixed" || (isEndJoint && (supportType === "Roller" || supportType === "Pin"))) {
+        carryOverFactors[member] = 0;
+      } else {
+        carryOverFactors[member] = 0.5; // Default carry-over factor
+      }
+    });
+  });
+
+  // Moment Distribution Method
+ // Moment Distribution Method
+const cycles = [];
+let currentMoments = { ...initialMoments };
+
+for (let cycle = 1; cycle <= numIterations; cycle++) {
+  const cycleData = { balance: {}, co: {} };
+
+  // Step 1: Balance at each joint
+  const unbalancedMoments = {};
+  joints.forEach(joint => {
+    const incomingMoments = [];
+    uniqueMembers.forEach(member => {
+      if (member.startsWith(joint.label)) {
+        incomingMoments.push(currentMoments[member]);
+      }
+    });
+    const totalUnbalanced = incomingMoments.reduce((sum, m) => sum + m, 0);
+    unbalancedMoments[joint.label] = -totalUnbalanced;
+  });
+
+  // Distribute moments at each joint
+  joints.forEach(joint => {
+    const from = joint.label;
+    const unbalanced = unbalancedMoments[from];
+
+    joint.connections.forEach(to => {
+      const member = `${from}${to}`;
+      const dfEntry = distributionFactors.find(df => df.from === from && df.to === to);
+      const df = dfEntry ? dfEntry.value : 0;
+      const distributedMoment = unbalanced * df;
+
+      // Balance moment applied
+      cycleData.balance[member] = distributedMoment;
+
+      // Update current moment
+      currentMoments[member] += distributedMoment;
+    });
+  });
+
+  // Step 2: Carry-over AFTER all balances
+  uniqueMembers.forEach(member => {
+    const from = member[0];
+    const to = member[1];
+    const reverseMember = `${to}${from}`;
+    const coFactor = carryOverFactors[member] || 0;
+    const carryOver = (cycleData.balance[member] || 0) * coFactor;
+
+    cycleData.co[reverseMember] = carryOver;
+
+    // Apply to reverse member
+    currentMoments[reverseMember] += carryOver;
+  });
+
+  cycles.push(cycleData);
+}
+
+
+  // Calculate total moments
+  const totalMoments = { ...initialMoments };
+  uniqueMembers.forEach(member => {
+    cycles.forEach(cycle => {
+      totalMoments[member] += (cycle.balance[member] || 0) + (cycle.co[member] || 0);
+    });
+  });
+
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
-      <h2 className="text-3xl font-bold">Results Page</h2>
-      <pre>{JSON.stringify(formData, null, 2)}</pre>
-      <p>Number of Iterations: {numIterations}</p>
+      <h2 className="text-3xl font-bold mb-6">Results</h2>
+      <h3 className="text-xl font-semibold mb-4">Table 1: Moment Distribution Method</h3>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border border-gray-600">
+          <thead>
+            <tr className="bg-gray-700">
+              <th className="p-3 text-gray-300">Joint</th>
+              {uniqueMembers.map(member => (
+                <th key={member} className="p-3 text-gray-300">{member}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {/* Stiffness Factor */}
+            <tr className="border-t border-gray-600">
+              <td className="p-3">Stiffness Factor</td>
+              {uniqueMembers.map(member => {
+                const sf = stiffnessFactors.find(sf => 
+                  (sf.from === member[0] && sf.to === member[1]) || 
+                  (sf.to === member[0] && sf.from === member[1])
+                );
+                return (
+                  <td key={member} className="p-3">
+                    {sf ? sf.value.toFixed(6) : "0"}
+                  </td>
+                );
+              })}
+            </tr>
+
+            {/* Distribution Factor */}
+            <tr className="border-t border-gray-600">
+              <td className="p-3">Distribution Factor</td>
+              {uniqueMembers.map(member => {
+                const df = distributionFactors.find(df => df.from === member[0] && df.to === member[1]);
+                return (
+                  <td key={member} className="p-3">
+                    {df ? df.value.toFixed(6) : "0"}
+                  </td>
+                );
+              })}
+            </tr>
+
+            {/* Carry-over Factor */}
+            <tr className="border-t border-gray-600">
+              <td className="p-3">Carry-over Factor</td>
+              {uniqueMembers.map(member => (
+                <td key={member} className="p-3">
+                  {(carryOverFactors[member] || 0).toFixed(6)}
+                </td>
+              ))}
+            </tr>
+
+            {/* Fixed End Moments */}
+            <tr className="border-t border-gray-600">
+              <td className="p-3">Fixed-end Moments</td>
+              {uniqueMembers.map(member => (
+                <td key={member} className="p-3">
+                  {initialMoments[member].toFixed(2)}
+                </td>
+              ))}
+            </tr>
+
+            {/* Cycles */}
+            {cycles.map((cycle, index) => (
+              <React.Fragment key={index}>
+                <tr className="border-t border-gray-600">
+                  <td className="p-3">Cycle {index + 1} Balance</td>
+                  {uniqueMembers.map(member => (
+                    <td key={member} className="p-3">
+                      {(cycle.balance[member] || 0).toFixed(2)}
+                    </td>
+                  ))}
+                </tr>
+                <tr className="border-t border-gray-600">
+                  <td className="p-3">CO</td>
+                  {uniqueMembers.map(member => (
+                    <td key={member} className="p-3">
+                      {(cycle.co[member] || 0).toFixed(2)}
+                    </td>
+                  ))}
+                </tr>
+              </React.Fragment>
+            ))}
+
+            {/* Total Moments */}
+            <tr className="border-t border-gray-600 font-bold">
+              <td className="p-3">Total Moments</td>
+              {uniqueMembers.map(member => (
+                <td key={member} className="p-3">
+                  {totalMoments[member].toFixed(1)}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };
