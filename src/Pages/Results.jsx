@@ -30,21 +30,6 @@ const Results = () => {
     initialMoments[member] = fem ? (member === `${fem.from}${fem.to}` ? fem.femFromTo : fem.femToFrom) : 0;
   });
 
-  // Carry-over factor (0.5 for middle joints, 0 for fixed/roller ends unless adjusted)
-  const carryOverFactors = {};
-  joints.forEach((joint, index) => {
-    const supportType = formData.supports[index];
-    const isEndJoint = joint.connections.length === 1;
-    joint.connections.forEach(toLabel => {
-      const member = `${joint.label}${toLabel}`;
-      if (supportType === "Fixed" || (isEndJoint && (supportType === "Roller" || supportType === "Pin"))) {
-        carryOverFactors[member] = 0;
-      } else {
-        carryOverFactors[member] = 0.5; // Default carry-over factor
-      }
-    });
-  });
-
   // Moment Distribution Method
  // Moment Distribution Method
 const cycles = [];
@@ -83,21 +68,7 @@ for (let cycle = 1; cycle <= numIterations; cycle++) {
       // Update current moment
       currentMoments[member] += distributedMoment;
     });
-  });
-
-  // Step 2: Carry-over AFTER all balances
-  uniqueMembers.forEach(member => {
-    const from = member[0];
-    const to = member[1];
-    const reverseMember = `${to}${from}`;
-    const coFactor = carryOverFactors[member] || 0;
-    const carryOver = (cycleData.balance[member] || 0) * coFactor;
-
-    cycleData.co[reverseMember] = carryOver;
-
-    // Apply to reverse member
-    currentMoments[reverseMember] += carryOver;
-  });
+  }); 
 
   cycles.push(cycleData);
 }
@@ -153,16 +124,6 @@ for (let cycle = 1; cycle <= numIterations; cycle++) {
                   </td>
                 );
               })}
-            </tr>
-
-            {/* Carry-over Factor */}
-            <tr className="border-t border-gray-600">
-              <td className="p-3">Carry-over Factor</td>
-              {uniqueMembers.map(member => (
-                <td key={member} className="p-3">
-                  {(carryOverFactors[member] || 0).toFixed(6)}
-                </td>
-              ))}
             </tr>
 
             {/* Fixed End Moments */}
