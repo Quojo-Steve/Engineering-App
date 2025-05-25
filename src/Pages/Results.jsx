@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 const Results = () => {
   const { state } = useLocation();
   const { formData, numIterations } = state || {};
-
+console.log(formData, numIterations);
   if (!formData || !numIterations) {
     return <div className="min-h-screen bg-gray-900 text-white p-6">No data available.</div>;
   }
