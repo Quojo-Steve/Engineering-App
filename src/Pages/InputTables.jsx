@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import fixImg from '../assets/fix.png';
 import rollerImg from '../assets/roller.png';
 import pinImg from '../assets/pinned.png';
+import nosupport from '../assets/nosupport.jpg';
 
 const InputTables = () => {
   const { state } = useLocation();
@@ -344,6 +345,7 @@ const InputTables = () => {
       Fixed: fixImg,
       Roller: rollerImg,
       Pin: pinImg,
+      NoSupport: nosupport,
     };
 
     return (
@@ -368,6 +370,7 @@ const InputTables = () => {
                       onChange={(e) => handleSupportChange(index, e.target.value)}
                       className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
+                      <option value="NoSupport">No Support</option>
                       <option value="Fixed">Fixed</option>
                       <option value="Roller">Roller</option>
                       <option value="Pin">Pin</option>
@@ -468,94 +471,138 @@ const InputTables = () => {
 
   const renderLoadForm = () => (
     <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
-      <h3 className="text-xl font-semibold text-blue-500 mb-4">Loads on Spans</h3>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border border-gray-600">
-          <thead>
-            <tr className="bg-gray-700">
-              <th className="p-3 text-gray-300">Span Between</th>
-              <th className="p-3 text-gray-300">Load Type</th>
-              <th className="p-3 text-gray-300">Load Value (kN or kN/m)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {formData.loads.map((load, index) => (
-              <tr key={index} className="border-t border-gray-600">
-                <td className="p-3">{`${load.from} - ${load.to}`}</td>
-                <td className="p-3">
-                  <select
-                    value={load.type}
-                    onChange={(e) => handleLoadChange(index, "type", e.target.value)}
-                    className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="Point">Point Load (kN)</option>
-                    <option value="Distributed">Uniform Distributed Load (kN/m)</option>
-                  </select>
-                </td>
-                <td className="p-3">
+    <h3 className="text-xl font-semibold text-blue-500 mb-4">Loads on Spans</h3>
+    <div className="overflow-x-auto">
+      <table className="w-full text-left border border-gray-600">
+        <thead>
+          <tr className="bg-gray-700">
+            <th className="p-3 text-gray-300">Span Between</th>
+            <th className="p-3 text-gray-300">Load Type</th>
+            <th className="p-3 text-gray-300">Load Value (kN or kN/m)</th>
+            <th className="p-3 text-gray-300">Distance from Start (m)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {formData.loads.map((load, index) => (
+            <tr key={index} className="border-t border-gray-600">
+              <td className="p-3">{`${load.from} - ${load.to}`}</td>
+              <td className="p-3">
+                <select
+                  value={load.type}
+                  onChange={(e) => handleLoadChange(index, "type", e.target.value)}
+                  className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="Point">Point Load (kN)</option>
+                  <option value="Distributed">Uniform Distributed Load (kN/m)</option>
+                </select>
+              </td>
+              <td className="p-3">
+                <input
+                  type="number"
+                  value={load.value}
+                  onChange={(e) => handleLoadChange(index, "value", e.target.value)}
+                  className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g., 10"
+                  min="0"
+                  required
+                />
+              </td>
+              <td className="p-3">
+                {load.type === "Point" ? (
                   <input
                     type="number"
-                    value={load.value}
-                    onChange={(e) => handleLoadChange(index, "value", e.target.value)}
+                    value={load.distance || ""}
+                    onChange={(e) => handleLoadChange(index, "distance", e.target.value)}
                     className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="e.g., 10"
+                    placeholder="e.g., 2"
                     min="0"
                     required
                   />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                ) : (
+                  <span className="text-gray-500">N/A</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
+  </div>
   );
 
-  return (
-    <div className="min-h-screen bg-gray-900 text-white p-6">
-      <div className="max-w-4xl mx-auto">
-        <Link to={"/configuration"}>{`< Configurations`}</Link>
-        <div className="flex justify-between mb-6">
-          {[1, 2, 3, 4, 5].map((s) => (
-            <div
-              key={s}
-              className={`w-1/5 text-center py-2 rounded ${
-                step >= s ? "bg-blue-600" : "bg-gray-700"
-              }`}
-            >
-              Step {s}
-            </div>
-          ))}
-        </div>
+return (
+  <div className="min-h-screen bg-gray-900 text-white p-6">
+    <div className="max-w-4xl mx-auto">
+      <Link to="/configuration" className="text-blue-400 hover:underline">
+        &larr; Configurations
+      </Link>
 
+      {/* Step Indicator with lines between dots */}
+      <div className="flex items-center justify-between mt-8 mb-12">
+        {[1, 2, 3, 4, 5].map((s, idx) => (
+          <React.Fragment key={s}>
+            {/* Step Dot */}
+            <div className="flex flex-col items-center">
+              <div
+                className={`w-10 h-10 flex items-center justify-center rounded-full border-2 transition-all duration-300
+                  ${step === s ? "border-blue-600 bg-blue-600 font-bold" 
+                  : step > s ? "border-blue-600 bg-gray-900" 
+                  : "border-gray-500 bg-gray-900"}`}
+              >
+                <span className={`${step >= s ? "text-white" : "text-gray-400"}`}>{s}</span>
+              </div>
+              <span className={`mt-2 text-xs ${step >= s ? "text-white" : "text-gray-500"}`}>
+                Step {s}
+              </span>
+            </div>
+
+            {/* Connecting line (only between steps) */}
+            {idx < 4 && (
+              <div className="flex-1 h-1 bg-gray-600 mx-2 relative">
+                <div
+                  className="absolute h-full bg-blue-600 transition-all duration-500"
+                  style={{
+                    width: step > s ? "100%" : "0%",
+                  }}
+                />
+              </div>
+            )}
+          </React.Fragment>
+        ))}
+      </div>
+
+      {/* Form Content */}
+      <div className="bg-gray-800 p-6 rounded-xl shadow-xl transition-all duration-300">
         {step === 1 && renderJointForm()}
         {step === 2 && renderSupportForm()}
         {step === 3 && renderMomentForm()}
         {step === 4 && renderSpanForm()}
         {step === 5 && renderLoadForm()}
+      </div>
 
-        <div className="flex justify-between mt-6">
-          <button
-            onClick={prevStep}
-            className={`py-2 px-4 rounded-lg ${
-              step === 1
-                ? "bg-gray-600 cursor-not-allowed"
-                : "bg-blue-600 hover:bg-blue-700"
-            } text-white transition duration-300`}
-            disabled={step === 1}
-          >
-            Previous
-          </button>
-          <button
-            onClick={nextStep}
-            className="py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition duration-300"
-          >
-            {step === 5 ? "Submit" : "Next"}
-          </button>
-        </div>
+      {/* Navigation Buttons */}
+      <div className="flex justify-between mt-8">
+        <button
+          onClick={prevStep}
+          className={`py-2 px-6 rounded-lg transition duration-300 font-semibold 
+            ${step === 1 
+              ? "bg-gray-600 cursor-not-allowed text-gray-300" 
+              : "bg-blue-600 hover:bg-blue-700 text-white"}`}
+          disabled={step === 1}
+        >
+          Previous
+        </button>
+
+        <button
+          onClick={nextStep}
+          className="py-2 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition duration-300"
+        >
+          {step === 5 ? "Submit" : "Next"}
+        </button>
       </div>
     </div>
-  );
+  </div>
+);
 };
 
 export default InputTables;
