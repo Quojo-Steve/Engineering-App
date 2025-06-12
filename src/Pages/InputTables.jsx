@@ -276,7 +276,7 @@ const InputTables = () => {
     };
 
     return (
-      <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
+      <div className="bg-gray-800 p-2 md:p-2 rounded-lg shadow-lg">
         <h3 className="text-xl font-semibold text-blue-500 mb-4">Joint Names</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-left border border-gray-600">
@@ -349,7 +349,7 @@ const InputTables = () => {
     };
 
     return (
-      <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
+      <div className="bg-gray-800 p-2 md:p-6 rounded-lg shadow-lg">
         <h3 className="text-xl font-semibold text-blue-500 mb-4">Support Types</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-left border border-gray-600">
@@ -398,7 +398,7 @@ const InputTables = () => {
   };
 
   const renderMomentForm = () => (
-    <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
+    <div className="bg-gray-800 p-2 md:p-6 rounded-lg shadow-lg">
       <h3 className="text-xl font-semibold text-blue-500 mb-4">
         Moment of Inertia
       </h3>
@@ -434,7 +434,7 @@ const InputTables = () => {
   );
 
   const renderSpanForm = () => (
-    <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
+    <div className="bg-gray-800 p-2 md:p-6 rounded-lg shadow-lg">
       <h3 className="text-xl font-semibold text-blue-500 mb-4">
         Length of Span
       </h3>
@@ -470,7 +470,7 @@ const InputTables = () => {
   );
 
   const renderLoadForm = () => (
-    <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
+    <div className="bg-gray-800 p-2 md:p-6 rounded-lg shadow-lg">
     <h3 className="text-xl font-semibold text-blue-500 mb-4">Loads on Spans</h3>
     <div className="overflow-x-auto">
       <table className="w-full text-left border border-gray-600">
@@ -531,7 +531,7 @@ const InputTables = () => {
   );
 
 return (
-  <div className="min-h-screen bg-gray-900 text-white p-6">
+  <div className="min-h-screen bg-gray-900 text-white p-2 md:p-6">
     <div className="max-w-4xl mx-auto">
       <Link to="/configuration" className="text-blue-400 hover:underline">
         &larr; Configurations
@@ -572,7 +572,7 @@ return (
       </div>
 
       {/* Form Content */}
-      <div className="bg-gray-800 p-6 rounded-xl shadow-xl transition-all duration-300">
+      <div className="bg-gray-800 p-2 md:p-6 rounded-xl shadow-xl transition-all duration-300">
         {step === 1 && renderJointForm()}
         {step === 2 && renderSupportForm()}
         {step === 3 && renderMomentForm()}
