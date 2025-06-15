@@ -8,7 +8,8 @@ import nosupport from '../assets/nosupport.jpg';
 
 const InputTables = () => {
   const { state } = useLocation();
-  const { numJoints, numIterations } = state || {};
+  const numIterations = 30;
+  const { numJoints } = state || {};
   const navigate = useNavigate();
 
   const [step, setStep] = useState(1);

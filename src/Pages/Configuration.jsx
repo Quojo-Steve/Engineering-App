@@ -4,18 +4,18 @@ import { useNavigate } from 'react-router-dom';
 const Configuration = () => {
   // State to store form inputs
   const [numJoints, setNumJoints] = useState('');
-  const [numIterations, setNumIterations] = useState('');
+  // const [numIterations, setNumIterations] = useState('');
   const navigate = useNavigate();
 
   // Handle form submission
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!numJoints || !numIterations) {
+    if (!numJoints) {
       alert('Please fill in both fields.');
       return;
     }
     // Navigate to the next page, passing the data
-    navigate('/input-tables', { state: { numJoints, numIterations } });
+    navigate('/input-tables', { state: { numJoints } });
   };
 
   return (
@@ -55,7 +55,7 @@ const Configuration = () => {
           </fieldset>
 
           {/* Number of Iterations Fieldset */}
-          <fieldset className="mb-6">
+          {/* <fieldset className="mb-6">
             <legend className="text-lg font-semibold text-gray-300 mb-2">
               Calculation Settings
             </legend>
@@ -78,7 +78,7 @@ const Configuration = () => {
                 required
               />
             </div>
-          </fieldset>
+          </fieldset> */}
 
           {/* Submit Button */}
           <button
