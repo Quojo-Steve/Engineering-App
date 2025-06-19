@@ -1,17 +1,17 @@
 import React, { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
-import fixImg from '../assets/fix.png';
-import rollerImg from '../assets/roller.png';
-import pinImg from '../assets/pinned.png';
-import nosupport from '../assets/nosupport.jpg';
+import fixImg from "../assets/fix.png";
+import rollerImg from "../assets/roller.png";
+import pinImg from "../assets/pinned.png";
+import nosupport from "../assets/nosupport.jpg";
 
 const InputTables = () => {
   const { state } = useLocation();
+  const [errors, setErrors] = useState({});
   const numIterations = 30;
   const { numJoints } = state || {};
   const navigate = useNavigate();
-
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     joints: Array.from({ length: numJoints }, (_, i) => ({
@@ -19,13 +19,11 @@ const InputTables = () => {
       label: "",
       connections: [],
     })),
-    supports: Array.from({ length: numJoints }, () => "Fixed"),
+    supports: Array.from({ length: numJoints }, () => "Roller"),
     momentsOfInertia: [],
     spans: [],
     loads: [],
   });
-
-  // Handlers (unchanged)
   const handleJointChange = (index, field, value) => {
     const updatedJoints = [...formData.joints];
     if (field === "label") {
@@ -72,31 +70,68 @@ const InputTables = () => {
     }
     setFormData({ ...formData, joints: updatedJoints });
   };
-
   const handleSupportChange = (index, value) => {
     const updatedSupports = [...formData.supports];
     updatedSupports[index] = value;
     setFormData({ ...formData, supports: updatedSupports });
   };
-
   const handleMomentChange = (index, value) => {
     const updatedMoments = [...formData.momentsOfInertia];
     updatedMoments[index].value = value;
     setFormData({ ...formData, momentsOfInertia: updatedMoments });
   };
-
   const handleSpanChange = (index, value) => {
     const updatedSpans = [...formData.spans];
     updatedSpans[index].value = value;
     setFormData({ ...formData, spans: updatedSpans });
   };
-
   const handleLoadChange = (index, field, value) => {
     const updatedLoads = [...formData.loads];
+    const newErrors = { ...errors };
+
+    if (field === "value") {
+      const loadValue = parseFloat(value);
+      if (loadValue < 0) {
+        newErrors[index] = "Load value cannot be negative.";
+        setErrors(newErrors);
+        return;
+      }
+      delete newErrors[index]; // Clear error if validation passes
+    }
+
+    if (field === "distance") {
+      const span = formData.spans.find(
+        (s) =>
+          s.from === updatedLoads[index].from && s.to === updatedLoads[index].to
+      );
+      const spanLength = parseFloat(span?.value);
+
+      if (isNaN(spanLength)) {
+        newErrors[index] = "Please provide a valid span length first.";
+        setErrors(newErrors);
+        return;
+      }
+
+      const distance = parseFloat(value);
+      if (distance < 0) {
+        newErrors[index] = "Distance cannot be negative.";
+        setErrors(newErrors);
+        return;
+      }
+      if (distance > spanLength) {
+        newErrors[
+          index
+        ] = `Distance cannot be greater than the span length (${spanLength} m).`;
+        setErrors(newErrors);
+        return;
+      }
+      delete newErrors[index]; // Clear error if validation passes
+    }
+
     updatedLoads[index][field] = value;
     setFormData({ ...formData, loads: updatedLoads });
+    setErrors(newErrors);
   };
-
   const getConnectedPairs = () => {
     const pairs = [];
     const visited = new Set();
@@ -115,11 +150,14 @@ const InputTables = () => {
     });
     return pairs;
   };
-
   const calculateStiffnessFactors = () => {
     const stiffnessFactors = formData.spans.map((span, index) => {
-      const fromJointIndex = formData.joints.findIndex(j => j.label === span.from);
-      const toJointIndex = formData.joints.findIndex(j => j.label === span.to);
+      const fromJointIndex = formData.joints.findIndex(
+        (j) => j.label === span.from
+      );
+      const toJointIndex = formData.joints.findIndex(
+        (j) => j.label === span.to
+      );
       const fromSupport = formData.supports[fromJointIndex];
       const toSupport = formData.supports[toJointIndex];
       const inertia = parseFloat(formData.momentsOfInertia[index].value);
@@ -141,31 +179,34 @@ const InputTables = () => {
 
     return stiffnessFactors;
   };
-
   const calculateDistributionFactors = (stiffnessFactors) => {
     const distributionFactors = [];
     const totalStiffnessAtJoint = {};
-    formData.joints.forEach(joint => {
+    formData.joints.forEach((joint) => {
       totalStiffnessAtJoint[joint.label] = 0;
     });
 
-    stiffnessFactors.forEach(sf => {
+    stiffnessFactors.forEach((sf) => {
       totalStiffnessAtJoint[sf.from] += sf.value;
       totalStiffnessAtJoint[sf.to] += sf.value;
     });
 
     formData.joints.forEach((joint, index) => {
       const supportType = formData.supports[index];
-      joint.connections.forEach(toLabel => {
+      joint.connections.forEach((toLabel) => {
         let dfFromTo;
-        if (supportType === "Fixed") {
+        if (supportType === "Fixed" || supportType === "NoSupport") {
           dfFromTo = 0;
-        } else if ((supportType === "Roller" || supportType === "Pin") && joint.connections.length === 1) {
+        } else if (
+          (supportType === "Roller" || supportType === "Pin") &&
+          joint.connections.length === 1
+        ) {
           dfFromTo = 1;
         } else {
-          const stiffness = stiffnessFactors.find(sf => 
-            (sf.from === joint.label && sf.to === toLabel) || 
-            (sf.to === joint.label && sf.from === toLabel)
+          const stiffness = stiffnessFactors.find(
+            (sf) =>
+              (sf.from === joint.label && sf.to === toLabel) ||
+              (sf.to === joint.label && sf.from === toLabel)
           ).value;
           dfFromTo = stiffness / totalStiffnessAtJoint[joint.label];
         }
@@ -180,25 +221,43 @@ const InputTables = () => {
 
     return distributionFactors;
   };
-
-  // New function to calculate Fixed End Moments
   const calculateFixedEndMoments = () => {
     const fixedEndMoments = formData.loads.map((load, index) => {
-      const length = parseFloat(formData.spans[index].value);
+      const span = formData.spans.find(
+        (s) => s.from === load.from && s.to === load.to
+      );
+      const length = parseFloat(span?.value);
       const weight = parseFloat(load.value);
-      let fem;
 
-      if (load.type === "Distributed") { // UDL
-        fem = (weight * length * length) / 12;
-      } else if (load.type === "Point") { // PL
-        fem = (weight * length) / 8;
+      let femFromTo = 0;
+      let femToFrom = 0;
+
+      if (load.type === "Distributed") {
+        // UDL: wL²/12
+        const fem = (weight * length ** 2) / 12;
+        femFromTo = -fem;
+        femToFrom = fem;
+      } else if (load.type === "Point") {
+        const a = parseFloat(load.distance); // Distance from left (from)
+        const b = length - a;
+
+        if (a === b) {
+          // Point load at center: PL/8
+          const fem = (weight * length) / 8;
+          femFromTo = -fem;
+          femToFrom = fem;
+        } else {
+          // Point load at arbitrary position
+          femFromTo = -(weight * a * b ** 2) / length ** 2;
+          femToFrom = (weight * a ** 2 * b) / length ** 2;
+        }
       }
 
       return {
         from: load.from,
         to: load.to,
-        femFromTo: -fem,  // Negative at 'from' end (convention: counterclockwise)
-        femToFrom: fem,   // Positive at 'to' end (convention: clockwise)
+        femFromTo: parseFloat(femFromTo.toFixed(3)),
+        femToFrom: parseFloat(femToFrom.toFixed(3)),
       };
     });
 
@@ -235,13 +294,19 @@ const InputTables = () => {
         return;
       }
       const stiffnessFactors = calculateStiffnessFactors();
-      const distributionFactors = calculateDistributionFactors(stiffnessFactors);
+      const distributionFactors =
+        calculateDistributionFactors(stiffnessFactors);
       const fixedEndMoments = calculateFixedEndMoments();
-      navigate("/results", { 
-        state: { 
-          formData: { ...formData, stiffnessFactors, distributionFactors, fixedEndMoments }, 
-          numIterations 
-        } 
+      navigate("/results", {
+        state: {
+          formData: {
+            ...formData,
+            stiffnessFactors,
+            distributionFactors,
+            fixedEndMoments,
+          },
+          numIterations,
+        },
       });
       return;
     }
@@ -252,18 +317,19 @@ const InputTables = () => {
         ...prev,
         momentsOfInertia: connectedPairs,
         spans: connectedPairs.map((pair) => ({ ...pair })),
-        loads: connectedPairs.map((pair) => ({ ...pair, type: "Point", value: "" })),
+        loads: connectedPairs.map((pair) => ({
+          ...pair,
+          type: "Point",
+          value: "",
+        })),
       }));
     }
 
     setStep(step + 1);
   };
-
   const prevStep = () => {
     if (step > 1) setStep(step - 1);
   };
-
-  // Render functions (unchanged)
   const renderJointForm = () => {
     const getJointLabel = (index, totalJoints) => {
       if (index === 0) return "Start Joint";
@@ -278,7 +344,9 @@ const InputTables = () => {
 
     return (
       <div className="bg-gray-800 p-2 md:p-2 rounded-lg shadow-lg">
-        <h3 className="text-xl font-semibold text-blue-500 mb-4">Joint Names</h3>
+        <h3 className="text-xl font-semibold text-blue-500 mb-4">
+          Joint Names
+        </h3>
         <div className="overflow-x-auto">
           <table className="w-full text-left border border-gray-600">
             <thead>
@@ -317,7 +385,9 @@ const InputTables = () => {
                         >
                           <input
                             type="checkbox"
-                            checked={joint.connections.includes(otherJoint.label)}
+                            checked={joint.connections.includes(
+                              otherJoint.label
+                            )}
                             onChange={() =>
                               handleJointChange(
                                 index,
@@ -328,7 +398,8 @@ const InputTables = () => {
                             className="mr-1"
                             disabled={!joint.label || !otherJoint.label}
                           />
-                          {otherJoint.label || `Joint ${otherJoint.jointNumber}`}
+                          {otherJoint.label ||
+                            `Joint ${otherJoint.jointNumber}`}
                         </label>
                       ))}
                   </td>
@@ -340,7 +411,6 @@ const InputTables = () => {
       </div>
     );
   };
-
   const renderSupportForm = () => {
     const supportImages = {
       Fixed: fixImg,
@@ -351,7 +421,9 @@ const InputTables = () => {
 
     return (
       <div className="bg-gray-800 p-2 md:p-6 rounded-lg shadow-lg">
-        <h3 className="text-xl font-semibold text-blue-500 mb-4">Support Types</h3>
+        <h3 className="text-xl font-semibold text-blue-500 mb-4">
+          Support Types
+        </h3>
         <div className="overflow-x-auto">
           <table className="w-full text-left border border-gray-600">
             <thead>
@@ -368,11 +440,27 @@ const InputTables = () => {
                   <td className="p-3">
                     <select
                       value={formData.supports[index]}
-                      onChange={(e) => handleSupportChange(index, e.target.value)}
+                      onChange={(e) =>
+                        handleSupportChange(index, e.target.value)
+                      }
                       className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      <option value="NoSupport">No Support</option>
-                      <option value="Fixed">Fixed</option>
+                      <option
+                        value="NoSupport"
+                        disabled={
+                          index !== 0 && index !== formData.joints.length - 1
+                        }
+                      >
+                        No Support
+                      </option>
+                      <option
+                        value="Fixed"
+                        disabled={
+                          index !== 0 && index !== formData.joints.length - 1
+                        }
+                      >
+                        Fixed
+                      </option>
                       <option value="Roller">Roller</option>
                       <option value="Pin">Pin</option>
                     </select>
@@ -397,7 +485,6 @@ const InputTables = () => {
       </div>
     );
   };
-
   const renderMomentForm = () => (
     <div className="bg-gray-800 p-2 md:p-6 rounded-lg shadow-lg">
       <h3 className="text-xl font-semibold text-blue-500 mb-4">
@@ -433,7 +520,6 @@ const InputTables = () => {
       </div>
     </div>
   );
-
   const renderSpanForm = () => (
     <div className="bg-gray-800 p-2 md:p-6 rounded-lg shadow-lg">
       <h3 className="text-xl font-semibold text-blue-500 mb-4">
@@ -469,141 +555,175 @@ const InputTables = () => {
       </div>
     </div>
   );
-
   const renderLoadForm = () => (
     <div className="bg-gray-800 p-2 md:p-6 rounded-lg shadow-lg">
-    <h3 className="text-xl font-semibold text-blue-500 mb-4">Loads on Spans</h3>
-    <div className="overflow-x-auto">
-      <table className="w-full text-left border border-gray-600">
-        <thead>
-          <tr className="bg-gray-700">
-            <th className="p-3 text-gray-300">Span Between</th>
-            <th className="p-3 text-gray-300">Load Type</th>
-            <th className="p-3 text-gray-300">Load Value (kN or kN/m)</th>
-            <th className="p-3 text-gray-300">Distance from Start (m)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {formData.loads.map((load, index) => (
-            <tr key={index} className="border-t border-gray-600">
-              <td className="p-3">{`${load.from} - ${load.to}`}</td>
-              <td className="p-3">
-                <select
-                  value={load.type}
-                  onChange={(e) => handleLoadChange(index, "type", e.target.value)}
-                  className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="Point">Point Load (kN)</option>
-                  <option value="Distributed">Uniform Distributed Load (kN/m)</option>
-                </select>
-              </td>
-              <td className="p-3">
-                <input
-                  type="number"
-                  value={load.value}
-                  onChange={(e) => handleLoadChange(index, "value", e.target.value)}
-                  className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g., 10"
-                  min="0"
-                  required
-                />
-              </td>
-              <td className="p-3">
-                {load.type === "Point" ? (
+      <h3 className="text-xl font-semibold text-blue-500 mb-4">
+        Loads on Spans
+      </h3>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border border-gray-600">
+          <thead>
+            <tr className="bg-gray-700">
+              <th className="p-3 text-gray-300">Span Between</th>
+              <th className="p-3 text-gray-300">Load Type</th>
+              <th className="p-3 text-gray-300">Load Value (kN or kN/m)</th>
+              <th className="p-3 text-gray-300">Distance from Start (m)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {formData.loads.map((load, index) => (
+              <tr key={index} className="border-t border-gray-600">
+                <td className="p-3">{`${load.from} - ${load.to}`}</td>
+                <td className="p-3">
+                  <select
+                    value={load.type}
+                    onChange={(e) =>
+                      handleLoadChange(index, "type", e.target.value)
+                    }
+                    className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="Point">Point Load (kN)</option>
+                    <option value="Distributed">
+                      Uniform Distributed Load (kN/m)
+                    </option>
+                  </select>
+                </td>
+                <td className="p-3">
                   <input
                     type="number"
-                    value={load.distance || ""}
-                    onChange={(e) => handleLoadChange(index, "distance", e.target.value)}
+                    value={load.value}
+                    onChange={(e) =>
+                      handleLoadChange(index, "value", e.target.value)
+                    }
                     className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="e.g., 2"
+                    placeholder="e.g., 10"
                     min="0"
                     required
                   />
-                ) : (
-                  <span className="text-gray-500">N/A</span>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+                  {errors[index] && load.type === "Point" && (
+                    <span className="text-red-500 text-sm">
+                      {errors[index]}
+                    </span>
+                  )}
+                </td>
+                <td className="p-3">
+                  {load.type === "Point" ? (
+                    <>
+                      <input
+                        type="number"
+                        value={load.distance || ""}
+                        onChange={(e) =>
+                          handleLoadChange(index, "distance", e.target.value)
+                        }
+                        className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g., 2"
+                        min="0"
+                        required
+                      />
+                      {errors[index] && (
+                        <span className="text-red-500 text-sm">
+                          {errors[index]}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-gray-500">N/A</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
-  </div>
   );
+  return (
+    <div className="min-h-screen bg-gray-900 text-white p-2 md:p-6">
+      <div className="max-w-4xl mx-auto">
+        <Link to="/configuration" className="text-blue-400 hover:underline">
+          &larr; Configurations
+        </Link>
 
-return (
-  <div className="min-h-screen bg-gray-900 text-white p-2 md:p-6">
-    <div className="max-w-4xl mx-auto">
-      <Link to="/configuration" className="text-blue-400 hover:underline">
-        &larr; Configurations
-      </Link>
-
-      {/* Step Indicator with lines between dots */}
-      <div className="flex items-center justify-between mt-8 mb-12">
-        {[1, 2, 3, 4, 5].map((s, idx) => (
-          <React.Fragment key={s}>
-            {/* Step Dot */}
-            <div className="flex flex-col items-center">
-              <div
-                className={`w-10 h-10 flex items-center justify-center rounded-full border-2 transition-all duration-300
-                  ${step === s ? "border-blue-600 bg-blue-600 font-bold" 
-                  : step > s ? "border-blue-600 bg-gray-900" 
-                  : "border-gray-500 bg-gray-900"}`}
-              >
-                <span className={`${step >= s ? "text-white" : "text-gray-400"}`}>{s}</span>
-              </div>
-              <span className={`mt-2 text-xs ${step >= s ? "text-white" : "text-gray-500"}`}>
-                Step {s}
-              </span>
-            </div>
-
-            {/* Connecting line (only between steps) */}
-            {idx < 4 && (
-              <div className="flex-1 h-1 bg-gray-600 mx-2 relative">
+        {/* Step Indicator with lines between dots */}
+        <div className="flex items-center justify-between mt-8 mb-12">
+          {[1, 2, 3, 4, 5].map((s, idx) => (
+            <React.Fragment key={s}>
+              {/* Step Dot */}
+              <div className="flex flex-col items-center">
                 <div
-                  className="absolute h-full bg-blue-600 transition-all duration-500"
-                  style={{
-                    width: step > s ? "100%" : "0%",
-                  }}
-                />
+                  className={`w-10 h-10 flex items-center justify-center rounded-full border-2 transition-all duration-300
+                  ${
+                    step === s
+                      ? "border-blue-600 bg-blue-600 font-bold"
+                      : step > s
+                      ? "border-blue-600 bg-gray-900"
+                      : "border-gray-500 bg-gray-900"
+                  }`}
+                >
+                  <span
+                    className={`${step >= s ? "text-white" : "text-gray-400"}`}
+                  >
+                    {s}
+                  </span>
+                </div>
+                <span
+                  className={`mt-2 text-xs ${
+                    step >= s ? "text-white" : "text-gray-500"
+                  }`}
+                >
+                  Step {s}
+                </span>
               </div>
-            )}
-          </React.Fragment>
-        ))}
-      </div>
 
-      {/* Form Content */}
-      <div className="bg-gray-800 p-2 md:p-6 rounded-xl shadow-xl transition-all duration-300">
-        {step === 1 && renderJointForm()}
-        {step === 2 && renderSupportForm()}
-        {step === 3 && renderMomentForm()}
-        {step === 4 && renderSpanForm()}
-        {step === 5 && renderLoadForm()}
-      </div>
+              {/* Connecting line (only between steps) */}
+              {idx < 4 && (
+                <div className="flex-1 h-1 bg-gray-600 mx-2 relative">
+                  <div
+                    className="absolute h-full bg-blue-600 transition-all duration-500"
+                    style={{
+                      width: step > s ? "100%" : "0%",
+                    }}
+                  />
+                </div>
+              )}
+            </React.Fragment>
+          ))}
+        </div>
 
-      {/* Navigation Buttons */}
-      <div className="flex justify-between mt-8">
-        <button
-          onClick={prevStep}
-          className={`py-2 px-6 rounded-lg transition duration-300 font-semibold 
-            ${step === 1 
-              ? "bg-gray-600 cursor-not-allowed text-gray-300" 
-              : "bg-blue-600 hover:bg-blue-700 text-white"}`}
-          disabled={step === 1}
-        >
-          Previous
-        </button>
+        {/* Form Content */}
+        <div className="bg-gray-800 p-2 md:p-6 rounded-xl shadow-xl transition-all duration-300">
+          {step === 1 && renderJointForm()}
+          {step === 2 && renderSupportForm()}
+          {step === 3 && renderMomentForm()}
+          {step === 4 && renderSpanForm()}
+          {step === 5 && renderLoadForm()}
+        </div>
 
-        <button
-          onClick={nextStep}
-          className="py-2 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition duration-300"
-        >
-          {step === 5 ? "Submit" : "Next"}
-        </button>
+        {/* Navigation Buttons */}
+        <div className="flex justify-between mt-8">
+          <button
+            onClick={prevStep}
+            className={`py-2 px-6 rounded-lg transition duration-300 font-semibold 
+            ${
+              step === 1
+                ? "bg-gray-600 cursor-not-allowed text-gray-300"
+                : "bg-blue-600 hover:bg-blue-700 text-white"
+            }`}
+            disabled={step === 1}
+          >
+            Previous
+          </button>
+
+          <button
+            onClick={nextStep}
+            className="py-2 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition duration-300"
+          >
+            {step === 5 ? "Submit" : "Next"}
+          </button>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
 };
 
 export default InputTables;
