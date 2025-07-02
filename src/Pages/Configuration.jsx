@@ -38,7 +38,7 @@ const Configuration = () => {
                 htmlFor="numJoints"
                 className="block text-sm font-medium text-gray-400 mb-1"
               >
-                Number of Joints <span className='text-gray-500 font-light text-xs'>(not more than 11)</span>
+                Number of Spans <span className='text-gray-500 font-light text-xs'>(not more than 10)</span>
               </label>
               <input
                 type="number"

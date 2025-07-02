@@ -23,7 +23,9 @@ const InputTables = () => {
     momentsOfInertia: [],
     spans: [],
     loads: [],
+    crossSections: [], // New field for cross-section data
   });
+
   const handleJointChange = (index, field, value) => {
     const updatedJoints = [...formData.joints];
     if (field === "label") {
@@ -70,21 +72,40 @@ const InputTables = () => {
     }
     setFormData({ ...formData, joints: updatedJoints });
   };
+
   const handleSupportChange = (index, value) => {
     const updatedSupports = [...formData.supports];
     updatedSupports[index] = value;
     setFormData({ ...formData, supports: updatedSupports });
   };
-  const handleMomentChange = (index, value) => {
-    const updatedMoments = [...formData.momentsOfInertia];
-    updatedMoments[index].value = value;
-    setFormData({ ...formData, momentsOfInertia: updatedMoments });
+
+  const handleCrossSectionChange = (index, field, value) => {
+    const updatedCrossSections = [...formData.crossSections];
+    updatedCrossSections[index][field] = value;
+
+    // Calculate moment of inertia based on cross-section shape
+    let inertia = 0;
+    if (updatedCrossSections[index].shape === "Rectangular") {
+      const { width, height } = updatedCrossSections[index];
+      if (width && height) {
+        inertia = (parseFloat(width) * parseFloat(height) ** 3) / 12;
+      }
+    } else if (updatedCrossSections[index].shape === "Circular") {
+      const { diameter } = updatedCrossSections[index];
+      if (diameter) {
+        inertia = (Math.PI * parseFloat(diameter) ** 4) / 64;
+      }
+    }
+    updatedCrossSections[index].momentOfInertia = inertia;
+    setFormData({ ...formData, momentsOfInertia: updatedCrossSections, crossSections: updatedCrossSections });
   };
+
   const handleSpanChange = (index, value) => {
     const updatedSpans = [...formData.spans];
     updatedSpans[index].value = value;
     setFormData({ ...formData, spans: updatedSpans });
   };
+
   const handleLoadChange = (index, field, value) => {
     const updatedLoads = [...formData.loads];
     const newErrors = { ...errors };
@@ -96,10 +117,10 @@ const InputTables = () => {
         setErrors(newErrors);
         return;
       }
-      delete newErrors[index]; // Clear error if validation passes
+      delete newErrors[index];
     }
 
-    if (field === "distance") {
+    if (field === "distance" || field === "endDistance") {
       const span = formData.spans.find(
         (s) =>
           s.from === updatedLoads[index].from && s.to === updatedLoads[index].to
@@ -125,13 +146,24 @@ const InputTables = () => {
         setErrors(newErrors);
         return;
       }
-      delete newErrors[index]; // Clear error if validation passes
+
+      if (field === "endDistance" && updatedLoads[index].distance) {
+        const startDistance = parseFloat(updatedLoads[index].distance);
+        if (distance < startDistance) {
+          newErrors[index] = "End distance must be greater than start distance.";
+          setErrors(newErrors);
+          return;
+        }
+      }
+
+      delete newErrors[index];
     }
 
     updatedLoads[index][field] = value;
     setFormData({ ...formData, loads: updatedLoads });
     setErrors(newErrors);
   };
+
   const getConnectedPairs = () => {
     const pairs = [];
     const visited = new Set();
@@ -143,6 +175,11 @@ const InputTables = () => {
             from: joint.label,
             to: conn,
             value: "",
+            shape: "Rectangular",
+            width: "",
+            height: "",
+            diameter: "",
+            momentOfInertia: 0,
           });
           visited.add(pairKey);
         }
@@ -150,6 +187,7 @@ const InputTables = () => {
     });
     return pairs;
   };
+
   const calculateStiffnessFactors = () => {
     const stiffnessFactors = formData.spans.map((span, index) => {
       const fromJointIndex = formData.joints.findIndex(
@@ -160,7 +198,7 @@ const InputTables = () => {
       );
       const fromSupport = formData.supports[fromJointIndex];
       const toSupport = formData.supports[toJointIndex];
-      const inertia = parseFloat(formData.momentsOfInertia[index].value);
+      const inertia = parseFloat(formData.momentsOfInertia[index].momentOfInertia);
       const length = parseFloat(span.value);
 
       let factor;
@@ -179,6 +217,7 @@ const InputTables = () => {
 
     return stiffnessFactors;
   };
+
   const calculateDistributionFactors = (stiffnessFactors) => {
     const distributionFactors = [];
     const totalStiffnessAtJoint = {};
@@ -221,6 +260,7 @@ const InputTables = () => {
 
     return distributionFactors;
   };
+
   const calculateFixedEndMoments = () => {
     const fixedEndMoments = formData.loads.map((load, index) => {
       const span = formData.spans.find(
@@ -233,10 +273,13 @@ const InputTables = () => {
       let femToFrom = 0;
 
       if (load.type === "Distributed") {
-        // UDL: wL²/12
-        const fem = (weight * length ** 2) / 12;
-        femFromTo = -fem;
-        femToFrom = fem;
+        const a = parseFloat(load.distance || 0); // Start of UDL
+        const b = parseFloat(load.endDistance || length); // End of UDL
+        const l = b - a; // Length of UDL
+
+        // Partial UDL: wab(2L - a - b)/L² and wab(a + b - 2L)/L²
+        femFromTo = -((weight * a * b * (2 * length - a - b)) / length ** 2);
+        femToFrom = (weight * a * b * (a + b - 2 * length)) / length ** 2;
       } else if (load.type === "Point") {
         const a = parseFloat(load.distance); // Distance from left (from)
         const b = length - a;
@@ -273,10 +316,10 @@ const InputTables = () => {
       }
     } else if (step === 3) {
       const allMomentsFilled = formData.momentsOfInertia.every(
-        (moment) => moment.value
+        (moment) => moment.momentOfInertia > 0
       );
       if (!allMomentsFilled) {
-        alert("Please provide a moment of inertia for each connection.");
+        alert("Please provide valid cross-section parameters for each span.");
         return;
       }
     } else if (step === 4) {
@@ -294,8 +337,7 @@ const InputTables = () => {
         return;
       }
       const stiffnessFactors = calculateStiffnessFactors();
-      const distributionFactors =
-        calculateDistributionFactors(stiffnessFactors);
+      const distributionFactors = calculateDistributionFactors(stiffnessFactors);
       const fixedEndMoments = calculateFixedEndMoments();
       navigate("/results", {
         state: {
@@ -316,20 +358,25 @@ const InputTables = () => {
       setFormData((prev) => ({
         ...prev,
         momentsOfInertia: connectedPairs,
+        crossSections: connectedPairs,
         spans: connectedPairs.map((pair) => ({ ...pair })),
         loads: connectedPairs.map((pair) => ({
           ...pair,
           type: "Point",
           value: "",
+          distance: "",
+          endDistance: "",
         })),
       }));
     }
 
     setStep(step + 1);
   };
+
   const prevStep = () => {
     if (step > 1) setStep(step - 1);
   };
+
   const renderJointForm = () => {
     const getJointLabel = (index, totalJoints) => {
       if (index === 0) return "Start Joint";
@@ -341,7 +388,6 @@ const InputTables = () => {
       else if (num === 3) suffix = "rd";
       return `${num}${suffix} Joint`;
     };
-
     return (
       <div className="bg-gray-800 p-2 md:p-2 rounded-lg shadow-lg">
         <h3 className="text-xl font-semibold text-blue-500 mb-4">
@@ -411,6 +457,7 @@ const InputTables = () => {
       </div>
     );
   };
+
   const renderSupportForm = () => {
     const supportImages = {
       Fixed: fixImg,
@@ -424,7 +471,7 @@ const InputTables = () => {
         <h3 className="text-xl font-semibold text-blue-500 mb-4">
           Support Types
         </h3>
-        <div className="overflow-x-auto">
+        <div className="overflow roaming-x-auto">
           <table className="w-full text-left border border-gray-600">
             <thead>
               <tr className="bg-gray-700">
@@ -485,33 +532,80 @@ const InputTables = () => {
       </div>
     );
   };
-  const renderMomentForm = () => (
+
+  const renderCrossSectionForm = () => (
     <div className="bg-gray-800 p-2 md:p-6 rounded-lg shadow-lg">
       <h3 className="text-xl font-semibold text-blue-500 mb-4">
-        Moment of Inertia
+        Cross-Section Properties
       </h3>
       <div className="overflow-x-auto">
         <table className="w-full text-left border border-gray-600">
           <thead>
             <tr className="bg-gray-700">
-              <th className="p-3 text-gray-300">Connection</th>
-              <th className="p-3 text-gray-300">Moment of Inertia (I)</th>
+              <th className="p-3 text-gray-300">Span</th>
+              <th className="p-3 text-gray-300">Shape</th>
+              <th className="p-3 text-gray-300">Parameters</th>
+              <th className="p-3 text-gray-300">Moment of Inertia (mm⁴)</th>
             </tr>
           </thead>
           <tbody>
-            {formData.momentsOfInertia.map((moment, index) => (
+            {formData.crossSections.map((section, index) => (
               <tr key={index} className="border-t border-gray-600">
-                <td className="p-3">{`${moment.from} - ${moment.to}`}</td>
+                <td className="p-3">{`${section.from} - ${section.to}`}</td>
                 <td className="p-3">
-                  <input
-                    type="number"
-                    value={moment.value}
-                    onChange={(e) => handleMomentChange(index, e.target.value)}
+                  <select
+                    value={section.shape}
+                    onChange={(e) =>
+                      handleCrossSectionChange(index, "shape", e.target.value)
+                    }
                     className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="e.g., 1000"
-                    min="0"
-                    required
-                  />
+                  >
+                    <option value="Rectangular">Rectangular</option>
+                    <option value="Circular">Circular</option>
+                  </select>
+                </td>
+                <td className="p-3">
+                  {section.shape === "Rectangular" ? (
+                    <div className="flex space-x-2">
+                      <input
+                        type="number"
+                        value={section.width}
+                        onChange={(e) =>
+                          handleCrossSectionChange(index, "width", e.target.value)
+                        }
+                        className="w-24 p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Width (mm)"
+                        min="0"
+                        required
+                      />
+                      <input
+                        type="number"
+                        value={section.height}
+                        onChange={(e) =>
+                          handleCrossSectionChange(index, "height", e.target.value)
+                        }
+                        className="w-24 p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Height (mm)"
+                        min="0"
+                        required
+                      />
+                    </div>
+                  ) : (
+                    <input
+                      type="number"
+                      value={section.diameter}
+                      onChange={(e) =>
+                        handleCrossSectionChange(index, "diameter", e.target.value)
+                      }
+                      className="w-24 p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Diameter (mm)"
+                      min="0"
+                      required
+                    />
+                  )}
+                </td>
+                <td className="p-3">
+                  {section.momentOfInertia.toFixed(2) || "0.00"}
                 </td>
               </tr>
             ))}
@@ -520,6 +614,7 @@ const InputTables = () => {
       </div>
     </div>
   );
+
   const renderSpanForm = () => (
     <div className="bg-gray-800 p-2 md:p-6 rounded-lg shadow-lg">
       <h3 className="text-xl font-semibold text-blue-500 mb-4">
@@ -529,7 +624,7 @@ const InputTables = () => {
         <table className="w-full text-left border border-gray-600">
           <thead>
             <tr className="bg-gray-700">
-              <th className="p-3 text-gray-300">Span Between</th>
+              <th className="p-3 text-gray-300">Span</th>
               <th className="p-3 text-gray-300">Length (m)</th>
             </tr>
           </thead>
@@ -555,10 +650,11 @@ const InputTables = () => {
       </div>
     </div>
   );
+
   const renderLoadForm = () => (
     <div className="bg-gray-800 p-2 md:p-6 rounded-lg shadow-lg">
       <h3 className="text-xl font-semibold text-blue-500 mb-4">
-        Loads on Spans
+        Loading Conditions
       </h3>
       <div className="overflow-x-auto">
         <table className="w-full text-left border border-gray-600">
@@ -567,7 +663,8 @@ const InputTables = () => {
               <th className="p-3 text-gray-300">Span Between</th>
               <th className="p-3 text-gray-300">Load Type</th>
               <th className="p-3 text-gray-300">Load Value (kN or kN/m)</th>
-              <th className="p-3 text-gray-300">Distance from Start (m)</th>
+              <th className="p-3 text-gray-300">Start Distance (m)</th>
+              <th className="p-3 text-gray-300">End Distance (m)</th>
             </tr>
           </thead>
           <tbody>
@@ -600,23 +697,41 @@ const InputTables = () => {
                     min="0"
                     required
                   />
-                  {errors[index] && load.type === "Point" && (
+                  {errors[index] && (
                     <span className="text-red-500 text-sm">
                       {errors[index]}
                     </span>
                   )}
                 </td>
                 <td className="p-3">
-                  {load.type === "Point" ? (
+                  <input
+                    type="number"
+                    value={load.distance || ""}
+                    onChange={(e) =>
+                      handleLoadChange(index, "distance", e.target.value)
+                    }
+                    className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., 2"
+                    min="0"
+                    required
+                  />
+                  {errors[index] && (
+                    <span className="text-red-500 text-sm">
+                      {errors[index]}
+                    </span>
+                  )}
+                </td>
+                <td className="p-3">
+                  {load.type === "Distributed" ? (
                     <>
                       <input
                         type="number"
-                        value={load.distance || ""}
+                        value={load.endDistance || ""}
                         onChange={(e) =>
-                          handleLoadChange(index, "distance", e.target.value)
+                          handleLoadChange(index, "endDistance", e.target.value)
                         }
                         className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="e.g., 2"
+                        placeholder="e.g., 4"
                         min="0"
                         required
                       />
@@ -637,18 +752,16 @@ const InputTables = () => {
       </div>
     </div>
   );
+
   return (
     <div className="min-h-screen bg-gray-900 text-white p-2 md:p-6">
       <div className="max-w-4xl mx-auto">
         <Link to="/configuration" className="text-blue-400 hover:underline">
-          &larr; Configurations
+          ← Configurations
         </Link>
-
-        {/* Step Indicator with lines between dots */}
         <div className="flex items-center justify-between mt-8 mb-12">
           {[1, 2, 3, 4, 5].map((s, idx) => (
             <React.Fragment key={s}>
-              {/* Step Dot */}
               <div className="flex flex-col items-center">
                 <div
                   className={`w-10 h-10 flex items-center justify-center rounded-full border-2 transition-all duration-300
@@ -674,8 +787,6 @@ const InputTables = () => {
                   Step {s}
                 </span>
               </div>
-
-              {/* Connecting line (only between steps) */}
               {idx < 4 && (
                 <div className="flex-1 h-1 bg-gray-600 mx-2 relative">
                   <div
@@ -689,17 +800,13 @@ const InputTables = () => {
             </React.Fragment>
           ))}
         </div>
-
-        {/* Form Content */}
         <div className="bg-gray-800 p-2 md:p-6 rounded-xl shadow-xl transition-all duration-300">
           {step === 1 && renderJointForm()}
           {step === 2 && renderSupportForm()}
-          {step === 3 && renderMomentForm()}
+          {step === 3 && renderCrossSectionForm()}
           {step === 4 && renderSpanForm()}
           {step === 5 && renderLoadForm()}
         </div>
-
-        {/* Navigation Buttons */}
         <div className="flex justify-between mt-8">
           <button
             onClick={prevStep}
@@ -713,7 +820,6 @@ const InputTables = () => {
           >
             Previous
           </button>
-
           <button
             onClick={nextStep}
             className="py-2 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition duration-300"

@@ -1,12 +1,21 @@
 import React, { useMemo } from "react";
 
-const MomentDistributionTable = ({ joints, spans, supports, fixedEndMoments, distributionFactors }) => {
+const MomentDistributionTable = ({
+  joints,
+  spans,
+  supports,
+  fixedEndMoments,
+  distributionFactors,
+}) => {
   const structure = useMemo(() => {
-    const headers = fixedEndMoments.flatMap(({ from, to }) => [`${from}${to}`, `${to}${from}`]);
+    const headers = fixedEndMoments.flatMap(({ from, to }) => [
+      `${from}${to}`,
+      `${to}${from}`,
+    ]);
     const uniqueHeaders = [...new Set(headers)];
 
     const initialRow = {};
-    uniqueHeaders.forEach(h => (initialRow[h] = 0));
+    uniqueHeaders.forEach((h) => (initialRow[h] = 0));
     fixedEndMoments.forEach(({ from, to, femFromTo, femToFrom }) => {
       initialRow[`${from}${to}`] = femFromTo;
       initialRow[`${to}${from}`] = femToFrom;
@@ -23,7 +32,7 @@ const MomentDistributionTable = ({ joints, spans, supports, fixedEndMoments, dis
 
     // Add distribution factor row
     const dfRow = { label: "DF" };
-    uniqueHeaders.forEach(h => {
+    uniqueHeaders.forEach((h) => {
       dfRow[h] = dfMap[h] !== undefined ? dfMap[h] : null;
     });
     rows.push(dfRow);
@@ -38,17 +47,30 @@ const MomentDistributionTable = ({ joints, spans, supports, fixedEndMoments, dis
       const carryOverRow = {};
       maxChange = 0;
 
-      joints.forEach(joint => {
+      joints.forEach((joint) => {
         const from = joint.label;
-        const connected = uniqueHeaders.filter(h => h.startsWith(from));
-        const unbalancedMoment = connected.reduce((sum, h) => sum + (currentMoments[h] || 0), 0);
+        const connected = uniqueHeaders.filter((h) => h.startsWith(from));
+        const unbalancedMoment = connected.reduce(
+          (sum, h) => sum + (currentMoments[h] || 0),
+          0
+        );
 
-        connected.forEach(h => {
+        connected.forEach((h) => {
           const df = dfMap[h] || 0;
-          const distributed = -unbalancedMoment * df;
+          let distributed = -unbalancedMoment * df;
+
+          // Round to 3 decimal places as per Excel behavior
+          distributed = parseFloat(distributed.toFixed(3));
+
           balanceRow[h] = distributed;
+
           const opposite = h[1] + h[0];
-          carryOverRow[opposite] = (carryOverRow[opposite] || 0) + distributed / 2;
+          let carry = distributed / 2;
+          carry = parseFloat(carry.toFixed(3));
+
+          carryOverRow[opposite] = parseFloat(
+            ((carryOverRow[opposite] || 0) + carry).toFixed(3)
+          );
 
           maxChange = Math.max(maxChange, Math.abs(distributed));
         });
@@ -57,16 +79,19 @@ const MomentDistributionTable = ({ joints, spans, supports, fixedEndMoments, dis
       rows.push({ label: `BAL ${iteration + 1}`, ...balanceRow });
       rows.push({ label: `CO ${iteration + 1}`, ...carryOverRow });
 
-      uniqueHeaders.forEach(h => {
-        currentMoments[h] =
-          (currentMoments[h] || 0) + (balanceRow[h] || 0) + (carryOverRow[h] || 0);
+      uniqueHeaders.forEach((h) => {
+        const updated =
+          (currentMoments[h] || 0) +
+          (balanceRow[h] || 0) +
+          (carryOverRow[h] || 0);
+        currentMoments[h] = parseFloat(updated.toFixed(3)); // Round totals too
       });
 
       iteration++;
     }
 
     const totalRow = {};
-    uniqueHeaders.forEach(h => {
+    uniqueHeaders.forEach((h) => {
       totalRow[h] = currentMoments[h];
     });
     rows.push({ label: "Total", ...totalRow });
@@ -80,18 +105,24 @@ const MomentDistributionTable = ({ joints, spans, supports, fixedEndMoments, dis
         <thead className="bg-gray-800">
           <tr>
             <th className="border border-gray-500 p-2">Step</th>
-            {structure.headers.map(header => (
-              <th key={header} className="border border-gray-500 p-2">{header}</th>
+            {structure.headers.map((header) => (
+              <th key={header} className="border border-gray-500 p-2">
+                {header}
+              </th>
             ))}
           </tr>
         </thead>
         <tbody>
           {structure.rows.map((row, idx) => (
             <tr key={idx} className="bg-gray-700">
-              <td className="border border-gray-500 p-2 font-bold">{row.label}</td>
-              {structure.headers.map(h => (
+              <td className="border border-gray-500 p-2 font-bold">
+                {row.label}
+              </td>
+              {structure.headers.map((h) => (
                 <td key={h} className="border border-gray-500 p-2 text-center">
-                  {row[h] !== undefined && row[h] !== null ? row[h].toFixed(3) : "-"}
+                  {row[h] !== undefined && row[h] !== null
+                    ? row[h].toFixed(3)
+                    : "-"}
                 </td>
               ))}
             </tr>
