@@ -15,9 +15,9 @@ const InputTables = () => {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     joints: Array.from({ length: numJoints }, (_, i) => ({
-      jointNumber: i + 1,
-      label: "",
-      connections: [],
+      Support_Number: i + 1,
+      Label: "",
+      Span_To: [],
     })),
     supports: Array.from({ length: numJoints }, () => "Roller"),
     momentsOfInertia: [],
@@ -30,44 +30,44 @@ const InputTables = () => {
     const updatedJoints = [...formData.joints];
     if (field === "label") {
       const labelExists = updatedJoints.some(
-        (joint, i) => i !== index && joint.label === value.toUpperCase()
+        (joint, i) => i !== index && joint.Label === value.toUpperCase()
       );
       if (labelExists) {
         alert("Joint labels must be unique.");
         return;
       }
-      updatedJoints[index].label = value.toUpperCase();
+      updatedJoints[index].Label = value.toUpperCase();
     } else if (field === "connections") {
       const currentJoint = updatedJoints[index];
-      const targetJoint = updatedJoints.find((joint) => joint.label === value);
+      const targetJoint = updatedJoints.find((joint) => joint.Label === value);
       if (!targetJoint) return;
       if (
-        currentJoint.connections.length >= 2 &&
-        !currentJoint.connections.includes(value)
+        currentJoint.Span_To.length >= 2 &&
+        !currentJoint.Span_To.includes(value)
       ) {
         alert("Each joint can connect to a maximum of 2 other joints.");
         return;
       }
       if (
-        targetJoint.connections.length >= 2 &&
-        !targetJoint.connections.includes(currentJoint.label)
+        targetJoint.Span_To.length >= 2 &&
+        !targetJoint.Span_To.includes(currentJoint.Label)
       ) {
-        alert(`Joint ${targetJoint.label} already has 2 connections.`);
+        alert(`Joint ${targetJoint.Label} already has 2 connections.`);
         return;
       }
-      if (currentJoint.connections.includes(value)) {
-        currentJoint.connections = currentJoint.connections.filter(
+      if (currentJoint.Span_To.includes(value)) {
+        currentJoint.Span_To = currentJoint.Span_To.filter(
           (conn) => conn !== value
         );
       } else {
-        currentJoint.connections.push(value);
+        currentJoint.Span_To.push(value);
       }
-      if (targetJoint.connections.includes(currentJoint.label)) {
-        targetJoint.connections = targetJoint.connections.filter(
-          (conn) => conn !== currentJoint.label
+      if (targetJoint.Span_To.includes(currentJoint.Label)) {
+        targetJoint.Span_To = targetJoint.Span_To.filter(
+          (conn) => conn !== currentJoint.Label
         );
       } else {
-        targetJoint.connections.push(currentJoint.label);
+        targetJoint.Span_To.push(currentJoint.Label);
       }
     }
     setFormData({ ...formData, joints: updatedJoints });
@@ -83,14 +83,14 @@ const InputTables = () => {
     const updatedCrossSections = [...formData.crossSections];
     updatedCrossSections[index][field] = value;
 
-    // Calculate moment of inertia based on cross-section shape
+    // Calculate moment of inertia based on cross-section Cross_Section
     let inertia = 0;
-    if (updatedCrossSections[index].shape === "Rectangular") {
+    if (updatedCrossSections[index].Cross_Section === "Rectangular") {
       const { width, height } = updatedCrossSections[index];
       if (width && height) {
         inertia = (parseFloat(width) * parseFloat(height) ** 3) / 12;
       }
-    } else if (updatedCrossSections[index].shape === "Circular") {
+    } else if (updatedCrossSections[index].Cross_Section === "Circular") {
       const { diameter } = updatedCrossSections[index];
       if (diameter) {
         inertia = (Math.PI * parseFloat(diameter) ** 4) / 64;
@@ -168,14 +168,14 @@ const InputTables = () => {
     const pairs = [];
     const visited = new Set();
     formData.joints.forEach((joint) => {
-      joint.connections.forEach((conn) => {
-        const pairKey = [joint.label, conn].sort().join("-");
+      joint.Span_To.forEach((conn) => {
+        const pairKey = [joint.Label, conn].sort().join("-");
         if (!visited.has(pairKey)) {
           pairs.push({
-            from: joint.label,
+            from: joint.Label,
             to: conn,
             value: "",
-            shape: "Rectangular",
+            Cross_Section: "Rectangular",
             width: "",
             height: "",
             diameter: "",
@@ -191,10 +191,10 @@ const InputTables = () => {
   const calculateStiffnessFactors = () => {
     const stiffnessFactors = formData.spans.map((span, index) => {
       const fromJointIndex = formData.joints.findIndex(
-        (j) => j.label === span.from
+        (j) => j.Label === span.from
       );
       const toJointIndex = formData.joints.findIndex(
-        (j) => j.label === span.to
+        (j) => j.Label === span.to
       );
       const fromSupport = formData.supports[fromJointIndex];
       const toSupport = formData.supports[toJointIndex];
@@ -222,7 +222,7 @@ const InputTables = () => {
     const distributionFactors = [];
     const totalStiffnessAtJoint = {};
     formData.joints.forEach((joint) => {
-      totalStiffnessAtJoint[joint.label] = 0;
+      totalStiffnessAtJoint[joint.Label] = 0;
     });
 
     stiffnessFactors.forEach((sf) => {
@@ -232,26 +232,26 @@ const InputTables = () => {
 
     formData.joints.forEach((joint, index) => {
       const supportType = formData.supports[index];
-      joint.connections.forEach((toLabel) => {
+      joint.Span_To.forEach((toLabel) => {
         let dfFromTo;
         if (supportType === "Fixed" || supportType === "NoSupport") {
           dfFromTo = 0;
         } else if (
           (supportType === "Roller" || supportType === "Pin") &&
-          joint.connections.length === 1
+          joint.Span_To.length === 1
         ) {
           dfFromTo = 1;
         } else {
           const stiffness = stiffnessFactors.find(
             (sf) =>
-              (sf.from === joint.label && sf.to === toLabel) ||
-              (sf.to === joint.label && sf.from === toLabel)
+              (sf.from === joint.Label && sf.to === toLabel) ||
+              (sf.to === joint.Label && sf.from === toLabel)
           ).value;
           dfFromTo = stiffness / totalStiffnessAtJoint[joint.label];
         }
 
         distributionFactors.push({
-          from: joint.label,
+          from: joint.Label,
           to: toLabel,
           value: dfFromTo,
         });
@@ -272,7 +272,8 @@ const InputTables = () => {
       let femFromTo = 0;
       let femToFrom = 0;
 
-      if (load.type === "Distributed") {
+      if (load.type === "UDL") {
+        //ToDo: wait for formula confirmation
         const a = parseFloat(load.distance || 0); // Start of UDL
         const b = parseFloat(load.endDistance || length); // End of UDL
         const l = b - a; // Length of UDL
@@ -280,7 +281,7 @@ const InputTables = () => {
         // Partial UDL: wab(2L - a - b)/L² and wab(a + b - 2L)/L²
         femFromTo = -((weight * a * b * (2 * length - a - b)) / length ** 2);
         femToFrom = (weight * a * b * (a + b - 2 * length)) / length ** 2;
-      } else if (load.type === "Point") {
+      } else if (load.type === "Point Load") {
         const a = parseFloat(load.distance); // Distance from left (from)
         const b = length - a;
 
@@ -309,7 +310,7 @@ const InputTables = () => {
 
   const nextStep = () => {
     if (step === 1) {
-      const allLabelsFilled = formData.joints.every((joint) => joint.label);
+      const allLabelsFilled = formData.joints.every((joint) => joint.Label);
       if (!allLabelsFilled) {
         alert("Please provide a label for each joint.");
         return;
@@ -362,7 +363,7 @@ const InputTables = () => {
         spans: connectedPairs.map((pair) => ({ ...pair })),
         loads: connectedPairs.map((pair) => ({
           ...pair,
-          type: "Point",
+          type: "Point Load",
           value: "",
           distance: "",
           endDistance: "",
@@ -411,7 +412,7 @@ const InputTables = () => {
                   <td className="p-3">
                     <input
                       type="text"
-                      value={joint.label}
+                      value={joint.Label}
                       onChange={(e) =>
                         handleJointChange(index, "label", e.target.value)
                       }
@@ -426,26 +427,26 @@ const InputTables = () => {
                       .filter((_, i) => i !== index)
                       .map((otherJoint) => (
                         <label
-                          key={otherJoint.jointNumber}
+                          key={otherJoint.Support_Number}
                           className="flex items-center"
                         >
                           <input
                             type="checkbox"
-                            checked={joint.connections.includes(
-                              otherJoint.label
+                            checked={joint.Span_To.includes(
+                              otherJoint.Label
                             )}
                             onChange={() =>
                               handleJointChange(
                                 index,
                                 "connections",
-                                otherJoint.label
+                                otherJoint.Label
                               )
                             }
                             className="mr-1"
-                            disabled={!joint.label || !otherJoint.label}
+                            disabled={!joint.Label || !otherJoint.Label}
                           />
-                          {otherJoint.label ||
-                            `Joint ${otherJoint.jointNumber}`}
+                          {otherJoint.Label ||
+                            `Joint ${otherJoint.Support_Number}`}
                         </label>
                       ))}
                   </td>
@@ -483,7 +484,7 @@ const InputTables = () => {
             <tbody>
               {formData.joints.map((joint, index) => (
                 <tr key={index} className="border-t border-gray-600">
-                  <td className="p-3">{joint.label}</td>
+                  <td className="p-3">{joint.Label}</td>
                   <td className="p-3">
                     <select
                       value={formData.supports[index]}
@@ -543,7 +544,7 @@ const InputTables = () => {
           <thead>
             <tr className="bg-gray-700">
               <th className="p-3 text-gray-300">Span</th>
-              <th className="p-3 text-gray-300">Shape</th>
+              <th className="p-3 text-gray-300">Cross_Section</th>
               <th className="p-3 text-gray-300">Parameters</th>
               <th className="p-3 text-gray-300">Moment of Inertia (mm⁴)</th>
             </tr>
@@ -554,9 +555,9 @@ const InputTables = () => {
                 <td className="p-3">{`${section.from} - ${section.to}`}</td>
                 <td className="p-3">
                   <select
-                    value={section.shape}
+                    value={section.Cross_Section}
                     onChange={(e) =>
-                      handleCrossSectionChange(index, "shape", e.target.value)
+                      handleCrossSectionChange(index, "Cross_Section", e.target.value)
                     }
                     className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
@@ -565,7 +566,7 @@ const InputTables = () => {
                   </select>
                 </td>
                 <td className="p-3">
-                  {section.shape === "Rectangular" ? (
+                  {section.Cross_Section === "Rectangular" ? (
                     <div className="flex space-x-2">
                       <input
                         type="number"
@@ -679,8 +680,8 @@ const InputTables = () => {
                     }
                     className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="Point">Point Load (kN)</option>
-                    <option value="Distributed">
+                    <option value="Point Load">Point Load (kN)</option>
+                    <option value="UDL">
                       Uniform Distributed Load (kN/m)
                     </option>
                   </select>
@@ -722,7 +723,7 @@ const InputTables = () => {
                   )}
                 </td>
                 <td className="p-3">
-                  {load.type === "Distributed" ? (
+                  {load.type === "UDL" ? (
                     <>
                       <input
                         type="number"
