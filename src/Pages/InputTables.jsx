@@ -247,7 +247,7 @@ const InputTables = () => {
               (sf.from === joint.Label && sf.to === toLabel) ||
               (sf.to === joint.Label && sf.from === toLabel)
           ).value;
-          dfFromTo = stiffness / totalStiffnessAtJoint[joint.label];
+          dfFromTo = stiffness / totalStiffnessAtJoint[joint.Label];
         }
 
         distributionFactors.push({

@@ -2,6 +2,8 @@ import React from "react";
 import { useLocation } from "react-router-dom";
 import BeamDiagram from "./BeamDiagram";
 import MomentDistributionTable from "./MomentDistributionTable";
+import ShearForceDiagram from "./ShearForceDiagram";
+import BendingMomentDiagram from "./BendingMomentDiagram";
 
 const Results = () => {
   const { state } = useLocation();
@@ -22,12 +24,12 @@ const Results = () => {
         item.type === "Point Load"
           ? "kN"
           : item.type === "UDL"
-          ? "kN/m"
-          : title === "Spans"
-          ? "m"
-          : typeof item.value === "number"
-          ? ""
-          : "",
+            ? "kN/m"
+            : title === "Spans"
+              ? "m"
+              : typeof item.value === "number"
+                ? ""
+                : "",
       distance: "m",
       endDistance: "m",
       femFromTo: "kNm",
@@ -123,8 +125,8 @@ const Results = () => {
                 key === "value" && title === "Spans"
                   ? "Length"
                   : key === "Cross_Section"
-                  ? "Shape"
-                  : key
+                    ? "Shape"
+                    : key
                       .replace(/([A-Z])/g, " $1")
                       .replace(/^./, (str) => str.toUpperCase());
 
@@ -240,6 +242,18 @@ const Results = () => {
         supports={formData.supports}
         fixedEndMoments={formData.fixedEndMoments}
         distributionFactors={formData.distributionFactors}
+      />
+
+      <ShearForceDiagram
+        spans={formData.spans}
+        loads={formData.loads}
+        supports={formData.supports}
+      />
+
+      <BendingMomentDiagram
+        spans={formData.spans}
+        loads={formData.loads}
+        fixedEndMoments={formData.fixedEndMoments}
       />
     </div>
   );
