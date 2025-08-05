@@ -7,6 +7,7 @@ import {
   Tooltip,
   CartesianGrid,
   ResponsiveContainer,
+  ReferenceLine,
 } from "recharts";
 
 const BendingMomentDiagram = ({ spans, loads, fixedEndMoments }) => {
@@ -34,18 +35,50 @@ const BendingMomentDiagram = ({ spans, loads, fixedEndMoments }) => {
     currentX += spanLength;
   });
 
+  // Calculate y-axis domain to ensure zero is centered if there are both positive and negative values
+  const allMoments = momentPoints.map(point => point.moment);
+  const maxMoment = Math.max(...allMoments);
+  const minMoment = Math.min(...allMoments);
+  const yDomain = [
+    Math.min(minMoment * 1.1, 0), // Extend 10% below minimum or to zero
+    Math.max(maxMoment * 1.1, 0)   // Extend 10% above maximum or to zero
+  ];
+
   return (
     <div className="mb-8">
       <h2 className="text-xl font-bold mb-4">Bending Moment Diagram</h2>
-      <ResponsiveContainer width="100%" height={300}>
-        <LineChart data={momentPoints}>
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="x" label={{ value: "Position (m)", position: "insideBottom", offset: -5 }} />
-          <YAxis label={{ value: "Moment (kNm)", angle: -90, position: "insideLeft" }} />
-          <Tooltip />
-          <Line type="monotone" dataKey="moment" stroke="#60a5fa" strokeWidth={2} />
-        </LineChart>
-      </ResponsiveContainer>
+      <div style={{ padding: '20px' }}> {/* Added padding around the chart */}
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart 
+            data={momentPoints}
+            margin={{ top: 20, right: 30, left: 30, bottom: 20 }} // Added margins to shift chart inward
+          >
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis 
+              dataKey="x" 
+              label={{ value: "Position (m)", position: "insideBottom", offset: -5 }} 
+            />
+            <YAxis 
+              domain={yDomain}
+              label={{ value: "Moment (kNm)", angle: -90, position: "insideLeft" }} 
+            />
+            <Tooltip 
+              formatter={(value) => [`${value} kNm`, "Moment"]}
+              labelFormatter={(label) => `Position: ${label} m`}
+            />
+            {/* X-axis reference line at y=0 */}
+            <ReferenceLine y={0} stroke="#6b7280" strokeWidth={1.5}  />
+            <Line 
+              type="monotone" 
+              dataKey="moment" 
+              stroke="#60a5fa" 
+              strokeWidth={2} 
+              dot={false}
+              activeDot={{ r: 6 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 };

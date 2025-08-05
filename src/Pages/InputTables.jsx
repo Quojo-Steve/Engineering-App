@@ -97,7 +97,11 @@ const InputTables = () => {
       }
     }
     updatedCrossSections[index].momentOfInertia = inertia;
-    setFormData({ ...formData, momentsOfInertia: updatedCrossSections, crossSections: updatedCrossSections });
+    setFormData({
+      ...formData,
+      momentsOfInertia: updatedCrossSections,
+      crossSections: updatedCrossSections,
+    });
   };
 
   const handleSpanChange = (index, value) => {
@@ -110,6 +114,33 @@ const InputTables = () => {
     const updatedLoads = [...formData.loads];
     const newErrors = { ...errors };
 
+    // Find the span for the current load
+    const span = formData.spans.find(
+      (s) =>
+        s.from === updatedLoads[index].from && s.to === updatedLoads[index].to
+    );
+    const spanLength = parseFloat(span?.value);
+
+    // Validate span length
+    if (isNaN(spanLength)) {
+      newErrors[index] = "Please provide a valid span length first.";
+      setErrors(newErrors);
+      return;
+    }
+
+    if (field === "type") {
+      updatedLoads[index].type = value;
+      if (value === "UDL") {
+        // For UDL, set distance to 0 and endDistance to span length
+        updatedLoads[index].distance = "0";
+        updatedLoads[index].endDistance = spanLength.toString();
+        delete newErrors[index];
+      } else {
+        // For Point Load, clear endDistance
+        updatedLoads[index].endDistance = "";
+      }
+    }
+
     if (field === "value") {
       const loadValue = parseFloat(value);
       if (loadValue < 0) {
@@ -118,21 +149,10 @@ const InputTables = () => {
         return;
       }
       delete newErrors[index];
+      updatedLoads[index].value = value;
     }
 
-    if (field === "distance" || field === "endDistance") {
-      const span = formData.spans.find(
-        (s) =>
-          s.from === updatedLoads[index].from && s.to === updatedLoads[index].to
-      );
-      const spanLength = parseFloat(span?.value);
-
-      if (isNaN(spanLength)) {
-        newErrors[index] = "Please provide a valid span length first.";
-        setErrors(newErrors);
-        return;
-      }
-
+    if (field === "distance" && updatedLoads[index].type !== "UDL") {
       const distance = parseFloat(value);
       if (distance < 0) {
         newErrors[index] = "Distance cannot be negative.";
@@ -146,20 +166,34 @@ const InputTables = () => {
         setErrors(newErrors);
         return;
       }
-
-      if (field === "endDistance" && updatedLoads[index].distance) {
-        const startDistance = parseFloat(updatedLoads[index].distance);
-        if (distance < startDistance) {
-          newErrors[index] = "End distance must be greater than start distance.";
-          setErrors(newErrors);
-          return;
-        }
-      }
-
       delete newErrors[index];
+      updatedLoads[index].distance = value;
     }
 
-    updatedLoads[index][field] = value;
+    if (field === "endDistance" && updatedLoads[index].type !== "UDL") {
+      const distance = parseFloat(value);
+      if (distance < 0) {
+        newErrors[index] = "End distance cannot be negative.";
+        setErrors(newErrors);
+        return;
+      }
+      if (distance > spanLength) {
+        newErrors[
+          index
+        ] = `End distance cannot be greater than the span length (${spanLength} m).`;
+        setErrors(newErrors);
+        return;
+      }
+      const startDistance = parseFloat(updatedLoads[index].distance);
+      if (!isNaN(startDistance) && distance < startDistance) {
+        newErrors[index] = "End distance must be greater than start distance.";
+        setErrors(newErrors);
+        return;
+      }
+      delete newErrors[index];
+      updatedLoads[index].endDistance = value;
+    }
+
     setFormData({ ...formData, loads: updatedLoads });
     setErrors(newErrors);
   };
@@ -198,7 +232,9 @@ const InputTables = () => {
       );
       const fromSupport = formData.supports[fromJointIndex];
       const toSupport = formData.supports[toJointIndex];
-      const inertia = parseFloat(formData.momentsOfInertia[index].momentOfInertia);
+      const inertia = parseFloat(
+        formData.momentsOfInertia[index].momentOfInertia
+      );
       const length = parseFloat(span.value);
 
       let factor;
@@ -338,7 +374,8 @@ const InputTables = () => {
         return;
       }
       const stiffnessFactors = calculateStiffnessFactors();
-      const distributionFactors = calculateDistributionFactors(stiffnessFactors);
+      const distributionFactors =
+        calculateDistributionFactors(stiffnessFactors);
       const fixedEndMoments = calculateFixedEndMoments();
       navigate("/results", {
         state: {
@@ -432,9 +469,7 @@ const InputTables = () => {
                         >
                           <input
                             type="checkbox"
-                            checked={joint.Span_To.includes(
-                              otherJoint.Label
-                            )}
+                            checked={joint.Span_To.includes(otherJoint.Label)}
                             onChange={() =>
                               handleJointChange(
                                 index,
@@ -557,7 +592,11 @@ const InputTables = () => {
                   <select
                     value={section.Cross_Section}
                     onChange={(e) =>
-                      handleCrossSectionChange(index, "Cross_Section", e.target.value)
+                      handleCrossSectionChange(
+                        index,
+                        "Cross_Section",
+                        e.target.value
+                      )
                     }
                     className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
@@ -572,7 +611,11 @@ const InputTables = () => {
                         type="number"
                         value={section.width}
                         onChange={(e) =>
-                          handleCrossSectionChange(index, "width", e.target.value)
+                          handleCrossSectionChange(
+                            index,
+                            "width",
+                            e.target.value
+                          )
                         }
                         className="w-24 p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="Width (mm)"
@@ -583,7 +626,11 @@ const InputTables = () => {
                         type="number"
                         value={section.height}
                         onChange={(e) =>
-                          handleCrossSectionChange(index, "height", e.target.value)
+                          handleCrossSectionChange(
+                            index,
+                            "height",
+                            e.target.value
+                          )
                         }
                         className="w-24 p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="Height (mm)"
@@ -596,7 +643,11 @@ const InputTables = () => {
                       type="number"
                       value={section.diameter}
                       onChange={(e) =>
-                        handleCrossSectionChange(index, "diameter", e.target.value)
+                        handleCrossSectionChange(
+                          index,
+                          "diameter",
+                          e.target.value
+                        )
                       }
                       className="w-24 p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="Diameter (mm)"
@@ -681,9 +732,7 @@ const InputTables = () => {
                     className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="Point Load">Point Load (kN)</option>
-                    <option value="UDL">
-                      Uniform Distributed Load (kN/m)
-                    </option>
+                    <option value="UDL">Uniform Distributed Load (kN/m)</option>
                   </select>
                 </td>
                 <td className="p-3">
@@ -705,18 +754,22 @@ const InputTables = () => {
                   )}
                 </td>
                 <td className="p-3">
-                  <input
-                    type="number"
-                    value={load.distance || ""}
-                    onChange={(e) =>
-                      handleLoadChange(index, "distance", e.target.value)
-                    }
-                    className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="e.g., 2"
-                    min="0"
-                    required
-                  />
-                  {errors[index] && (
+                  {load.type === "UDL" ? (
+                    <span className="text-gray-500">0</span>
+                  ) : (
+                    <input
+                      type="number"
+                      value={load.distance || ""}
+                      onChange={(e) =>
+                        handleLoadChange(index, "distance", e.target.value)
+                      }
+                      className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="e.g., 2"
+                      min="0"
+                      required
+                    />
+                  )}
+                  {errors[index] && load.type !== "UDL" && (
                     <span className="text-red-500 text-sm">
                       {errors[index]}
                     </span>
@@ -724,6 +777,12 @@ const InputTables = () => {
                 </td>
                 <td className="p-3">
                   {load.type === "UDL" ? (
+                    <span className="text-gray-500">
+                      {formData.spans.find(
+                        (s) => s.from === load.from && s.to === load.to
+                      )?.value || "N/A"}
+                    </span>
+                  ) : (
                     <>
                       <input
                         type="number"
@@ -742,8 +801,6 @@ const InputTables = () => {
                         </span>
                       )}
                     </>
-                  ) : (
-                    <span className="text-gray-500">N/A</span>
                   )}
                 </td>
               </tr>
