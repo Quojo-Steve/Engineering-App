@@ -23,7 +23,7 @@ const InputTables = () => {
     momentsOfInertia: [],
     spans: [],
     loads: [],
-    crossSections: [], // New field for cross-section data
+    crossSections: [],
   });
 
   const handleJointChange = (index, field, value) => {
@@ -83,7 +83,6 @@ const InputTables = () => {
     const updatedCrossSections = [...formData.crossSections];
     updatedCrossSections[index][field] = value;
 
-    // Calculate moment of inertia based on cross-section Cross_Section
     let inertia = 0;
     if (updatedCrossSections[index].Cross_Section === "Rectangular") {
       const { width, height } = updatedCrossSections[index];
@@ -131,13 +130,13 @@ const InputTables = () => {
     if (field === "type") {
       updatedLoads[index].type = value;
       if (value === "UDL") {
-        // For UDL, set distance to 0 and endDistance to span length
+        // For UDL, set distance to 0 and remove endDistance
         updatedLoads[index].distance = "0";
-        updatedLoads[index].endDistance = spanLength.toString();
+        delete updatedLoads[index].endDistance;
         delete newErrors[index];
       } else {
         // For Point Load, clear endDistance
-        updatedLoads[index].endDistance = "";
+        delete updatedLoads[index].endDistance;
       }
     }
 
@@ -168,30 +167,6 @@ const InputTables = () => {
       }
       delete newErrors[index];
       updatedLoads[index].distance = value;
-    }
-
-    if (field === "endDistance" && updatedLoads[index].type !== "UDL") {
-      const distance = parseFloat(value);
-      if (distance < 0) {
-        newErrors[index] = "End distance cannot be negative.";
-        setErrors(newErrors);
-        return;
-      }
-      if (distance > spanLength) {
-        newErrors[
-          index
-        ] = `End distance cannot be greater than the span length (${spanLength} m).`;
-        setErrors(newErrors);
-        return;
-      }
-      const startDistance = parseFloat(updatedLoads[index].distance);
-      if (!isNaN(startDistance) && distance < startDistance) {
-        newErrors[index] = "End distance must be greater than start distance.";
-        setErrors(newErrors);
-        return;
-      }
-      delete newErrors[index];
-      updatedLoads[index].endDistance = value;
     }
 
     setFormData({ ...formData, loads: updatedLoads });
@@ -309,14 +284,9 @@ const InputTables = () => {
       let femToFrom = 0;
 
       if (load.type === "UDL") {
-        //ToDo: wait for formula confirmation
-        const a = parseFloat(load.distance || 0); // Start of UDL
-        const b = parseFloat(load.endDistance || length); // End of UDL
-        const l = b - a; // Length of UDL
-
-        // Partial UDL: wab(2L - a - b)/L² and wab(a + b - 2L)/L²
-        femFromTo = -((weight * a * b * (2 * length - a - b)) / length ** 2);
-        femToFrom = (weight * a * b * (a + b - 2 * length)) / length ** 2;
+        // UDL covers the entire span
+        femFromTo = -((weight * length * length) / 12); // -wL²/12
+        femToFrom = (weight * length * length) / 12; // wL²/12
       } else if (load.type === "Point Load") {
         const a = parseFloat(load.distance); // Distance from left (from)
         const b = length - a;
@@ -403,7 +373,6 @@ const InputTables = () => {
           type: "Point Load",
           value: "",
           distance: "",
-          endDistance: "",
         })),
       }));
     }
@@ -507,7 +476,7 @@ const InputTables = () => {
         <h3 className="text-xl font-semibold text-blue-500 mb-4">
           Support Types
         </h3>
-        <div className="overflow roaming-x-auto">
+        <div className="overflow-x-auto">
           <table className="w-full text-left border border-gray-600">
             <thead>
               <tr className="bg-gray-700">
@@ -716,7 +685,6 @@ const InputTables = () => {
               <th className="p-3 text-gray-300">Load Type</th>
               <th className="p-3 text-gray-300">Load Value (kN or kN/m)</th>
               <th className="p-3 text-gray-300">Start Distance (m)</th>
-              <th className="p-3 text-gray-300">End Distance (m)</th>
             </tr>
           </thead>
           <tbody>
@@ -755,7 +723,7 @@ const InputTables = () => {
                 </td>
                 <td className="p-3">
                   {load.type === "UDL" ? (
-                    <span className="text-gray-500">0</span>
+                    <span className="text-gray-500">0 (Full Span)</span>
                   ) : (
                     <input
                       type="number"
@@ -773,34 +741,6 @@ const InputTables = () => {
                     <span className="text-red-500 text-sm">
                       {errors[index]}
                     </span>
-                  )}
-                </td>
-                <td className="p-3">
-                  {load.type === "UDL" ? (
-                    <span className="text-gray-500">
-                      {formData.spans.find(
-                        (s) => s.from === load.from && s.to === load.to
-                      )?.value || "N/A"}
-                    </span>
-                  ) : (
-                    <>
-                      <input
-                        type="number"
-                        value={load.endDistance || ""}
-                        onChange={(e) =>
-                          handleLoadChange(index, "endDistance", e.target.value)
-                        }
-                        className="w-full p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="e.g., 4"
-                        min="0"
-                        required
-                      />
-                      {errors[index] && (
-                        <span className="text-red-500 text-sm">
-                          {errors[index]}
-                        </span>
-                      )}
-                    </>
                   )}
                 </td>
               </tr>

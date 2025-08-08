@@ -48,6 +48,9 @@ const MomentDistributionTable = ({
       maxChange = 0;
 
       joints.forEach((joint) => {
+        const supportType = supports[joint.Support_Number - 1];
+        if (supportType === "Fixed") return; // Don't distribute from fixed joint
+
         const from = joint.label;
         const connected = uniqueHeaders.filter((h) => h.startsWith(from));
         const unbalancedMoment = connected.reduce(
@@ -59,9 +62,7 @@ const MomentDistributionTable = ({
           const df = dfMap[h] || 0;
           let distributed = -unbalancedMoment * df;
 
-          // Round to 3 decimal places as per Excel behavior
           distributed = parseFloat(distributed.toFixed(3));
-
           balanceRow[h] = distributed;
 
           const opposite = h[1] + h[0];
