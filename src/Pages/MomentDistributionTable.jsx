@@ -1,5 +1,8 @@
 import React, { useMemo } from "react";
 
+// Helper: always round down to 2 decimal places
+const floor2dp = (num) => Math.floor(num * 100) / 100;
+
 const MomentDistributionTable = ({
   joints,
   spans,
@@ -17,8 +20,8 @@ const MomentDistributionTable = ({
     const initialRow = {};
     uniqueHeaders.forEach((h) => (initialRow[h] = 0));
     fixedEndMoments.forEach(({ from, to, femFromTo, femToFrom }) => {
-      initialRow[`${from}${to}`] = femFromTo;
-      initialRow[`${to}${from}`] = femToFrom;
+      initialRow[`${from}${to}`] = floor2dp(femFromTo);
+      initialRow[`${to}${from}`] = floor2dp(femToFrom);
     });
 
     const rows = [];
@@ -42,16 +45,22 @@ const MomentDistributionTable = ({
     let iteration = 0;
     let maxChange = Infinity;
 
-    while (iteration < 10 && maxChange > epsilon) {
-      const balanceRow = {};
-      const carryOverRow = {};
+    while (iteration < 15 && maxChange > epsilon) {
+      const balanceRow = { label: `BAL ${iteration + 1}` };
+      const carryOverRow = { label: `CO ${iteration + 1}` };
+
+      uniqueHeaders.forEach((h) => {
+        balanceRow[h] = 0;
+        carryOverRow[h] = 0;
+      });
+
       maxChange = 0;
 
       joints.forEach((joint) => {
         const supportType = supports[joint.Support_Number - 1];
-        if (supportType === "Fixed") return; // Don't distribute from fixed joint
+        if (supportType === "Fixed") return;
 
-        const from = joint.label;
+        const from = joint.Label || joint.label;
         const connected = uniqueHeaders.filter((h) => h.startsWith(from));
         const unbalancedMoment = connected.reduce(
           (sum, h) => sum + (currentMoments[h] || 0),
@@ -61,31 +70,27 @@ const MomentDistributionTable = ({
         connected.forEach((h) => {
           const df = dfMap[h] || 0;
           let distributed = -unbalancedMoment * df;
-
-          distributed = parseFloat(distributed.toFixed(3));
+          distributed = floor2dp(distributed);
           balanceRow[h] = distributed;
 
           const opposite = h[1] + h[0];
           let carry = distributed / 2;
-          carry = parseFloat(carry.toFixed(3));
-
-          carryOverRow[opposite] = parseFloat(
-            ((carryOverRow[opposite] || 0) + carry).toFixed(3)
+          carry = floor2dp(carry);
+          carryOverRow[opposite] = floor2dp(
+            (carryOverRow[opposite] + carry)
           );
 
           maxChange = Math.max(maxChange, Math.abs(distributed));
         });
       });
 
-      rows.push({ label: `BAL ${iteration + 1}`, ...balanceRow });
-      rows.push({ label: `CO ${iteration + 1}`, ...carryOverRow });
+      rows.push(balanceRow);
+      rows.push(carryOverRow);
 
       uniqueHeaders.forEach((h) => {
         const updated =
-          (currentMoments[h] || 0) +
-          (balanceRow[h] || 0) +
-          (carryOverRow[h] || 0);
-        currentMoments[h] = parseFloat(updated.toFixed(3)); // Round totals too
+          (currentMoments[h] || 0) + balanceRow[h] + carryOverRow[h];
+        currentMoments[h] = floor2dp(updated);
       });
 
       iteration++;
@@ -122,7 +127,7 @@ const MomentDistributionTable = ({
               {structure.headers.map((h) => (
                 <td key={h} className="border border-gray-500 p-2 text-center">
                   {row[h] !== undefined && row[h] !== null
-                    ? row[h].toFixed(3)
+                    ? row[h].toFixed(2)
                     : "-"}
                 </td>
               ))}

@@ -221,20 +221,20 @@ const Results = () => {
       )}
 
       {/* Raw data view for debugging */}
-      <details className="mt-8 border rounded-lg p-4">
+      {/* <details className="mt-8 border rounded-lg p-4">
         <summary className="font-bold cursor-pointer">Raw Data</summary>
         <pre className="bg-gray-100 p-4 mt-2 rounded overflow-x-auto">
           {JSON.stringify(formData, null, 2)}
         </pre>
-      </details>
-
+      </details> */}
+{/* 
       <BeamDiagram
         joints={formData.joints}
         spans={formData.spans}
         supports={formData.supports}
         loads={formData.loads}
         fixedEndMoments={formData.fixedEndMoments}
-      />
+      /> */}
 
       <MomentDistributionTable
         joints={formData.joints}
