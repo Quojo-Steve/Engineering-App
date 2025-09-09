@@ -1,11 +1,15 @@
 import React, { useMemo } from "react";
+import BendingMomentDiagram from "./BendingMomentDiagram";
+import MomentDistributionAndBMD from "./BendingMomentDiagram";
+import ShearForceDiagram from "./ShearForceDiagram";
 
 // Helper: always round down to 2 decimal places
-const floor2dp = (num) => Math.floor(num * 100) / 100;
+const floor3dp = (num) => Math.floor(num * 100) / 100;
 
 const MomentDistributionTable = ({
   joints,
   spans,
+  loads,
   supports,
   fixedEndMoments,
   distributionFactors,
@@ -16,12 +20,11 @@ const MomentDistributionTable = ({
       `${to}${from}`,
     ]);
     const uniqueHeaders = [...new Set(headers)];
-
     const initialRow = {};
     uniqueHeaders.forEach((h) => (initialRow[h] = 0));
     fixedEndMoments.forEach(({ from, to, femFromTo, femToFrom }) => {
-      initialRow[`${from}${to}`] = floor2dp(femFromTo);
-      initialRow[`${to}${from}`] = floor2dp(femToFrom);
+      initialRow[`${from}${to}`] = floor3dp(femFromTo);
+      initialRow[`${to}${from}`] = floor3dp(femToFrom);
     });
 
     const rows = [];
@@ -45,7 +48,7 @@ const MomentDistributionTable = ({
     let iteration = 0;
     let maxChange = Infinity;
 
-    while (iteration < 15 && maxChange > epsilon) {
+    while (iteration < 18 && maxChange > epsilon) {
       const balanceRow = { label: `BAL ${iteration + 1}` };
       const carryOverRow = { label: `CO ${iteration + 1}` };
 
@@ -70,14 +73,14 @@ const MomentDistributionTable = ({
         connected.forEach((h) => {
           const df = dfMap[h] || 0;
           let distributed = -unbalancedMoment * df;
-          distributed = floor2dp(distributed);
+          distributed = floor3dp(distributed);
           balanceRow[h] = distributed;
 
           const opposite = h[1] + h[0];
           let carry = distributed / 2;
-          carry = floor2dp(carry);
-          carryOverRow[opposite] = floor2dp(
-            (carryOverRow[opposite] + carry)
+          carry = floor3dp(carry);
+          carryOverRow[opposite] = floor3dp(
+            (carryOverRow[opposite] || 0) + carry
           );
 
           maxChange = Math.max(maxChange, Math.abs(distributed));
@@ -90,24 +93,23 @@ const MomentDistributionTable = ({
       uniqueHeaders.forEach((h) => {
         const updated =
           (currentMoments[h] || 0) + balanceRow[h] + carryOverRow[h];
-        currentMoments[h] = floor2dp(updated);
+        currentMoments[h] = floor3dp(updated);
       });
 
       iteration++;
     }
 
-    const totalRow = {};
+    const totalRow = { label: "Total" };
     uniqueHeaders.forEach((h) => {
-      totalRow[h] = currentMoments[h];
+      totalRow[h] = currentMoments[h] || 0;
     });
-    rows.push({ label: "Total", ...totalRow });
-
-    return { headers: uniqueHeaders, rows };
+    rows.push(totalRow);
+    return { headers: uniqueHeaders, rows, totalRow };
   }, [joints, fixedEndMoments, distributionFactors]);
 
   return (
     <div className="overflow-auto">
-      <table className="min-w-full table-auto border border-gray-500 text-white">
+      <table className="min-w-full table-auto border border-gray-500 text-white mb-5">
         <thead className="bg-gray-800">
           <tr>
             <th className="border border-gray-500 p-2">Step</th>
@@ -127,7 +129,7 @@ const MomentDistributionTable = ({
               {structure.headers.map((h) => (
                 <td key={h} className="border border-gray-500 p-2 text-center">
                   {row[h] !== undefined && row[h] !== null
-                    ? row[h].toFixed(2)
+                    ? row[h].toFixed(3)
                     : "-"}
                 </td>
               ))}
@@ -135,6 +137,13 @@ const MomentDistributionTable = ({
           ))}
         </tbody>
       </table>
+
+      <ShearForceDiagram loads={loads} total={structure.totalRow} spans={spans} />
+      <MomentDistributionAndBMD
+        spans={spans}
+        loads={loads}
+        finalMoments={structure.totalRow}
+      />
     </div>
   );
 };

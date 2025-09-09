@@ -95,6 +95,7 @@ const InputTables = () => {
         inertia = (Math.PI * parseFloat(diameter) ** 4) / 64;
       }
     }
+    console.log(inertia)
     updatedCrossSections[index].momentOfInertia = inertia;
     setFormData({
       ...formData,
@@ -216,7 +217,7 @@ const InputTables = () => {
       if (fromSupport === "Fixed" || toSupport === "Fixed") {
         factor = (4 * inertia) / length;
       } else {
-        factor = (3 * inertia) / length;
+        factor = (4 * inertia) / length;
       }
 
       return {
@@ -550,7 +551,7 @@ const InputTables = () => {
               <th className="p-3 text-gray-300">Span</th>
               <th className="p-3 text-gray-300">Cross_Section</th>
               <th className="p-3 text-gray-300">Parameters</th>
-              <th className="p-3 text-gray-300">Moment of Inertia (mm⁴)</th>
+              <th className="p-3 text-gray-300">Moment of Inertia (m⁴)</th>
             </tr>
           </thead>
           <tbody>
@@ -587,7 +588,7 @@ const InputTables = () => {
                           )
                         }
                         className="w-24 p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Width (mm)"
+                        placeholder="Width (m)"
                         min="0"
                         required
                       />
@@ -602,7 +603,7 @@ const InputTables = () => {
                           )
                         }
                         className="w-24 p-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Height (mm)"
+                        placeholder="Height (m)"
                         min="0"
                         required
                       />
@@ -626,7 +627,7 @@ const InputTables = () => {
                   )}
                 </td>
                 <td className="p-3">
-                  {section.momentOfInertia.toFixed(2) || "0.00"}
+                  {section.momentOfInertia.toFixed(10) || "0.00"}
                 </td>
               </tr>
             ))}

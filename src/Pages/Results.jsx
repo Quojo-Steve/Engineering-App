@@ -241,20 +241,17 @@ const Results = () => {
         spans={formData.spans}
         supports={formData.supports}
         fixedEndMoments={formData.fixedEndMoments}
+        loads={formData.loads}
         distributionFactors={formData.distributionFactors}
       />
 
-      <ShearForceDiagram
-        spans={formData.spans}
-        loads={formData.loads}
-        supports={formData.supports}
-      />
+      
 
-      <BendingMomentDiagram
+      {/* <BendingMomentDiagram
         spans={formData.spans}
         loads={formData.loads}
         fixedEndMoments={formData.fixedEndMoments}
-      />
+      /> */}
     </div>
   );
 };
