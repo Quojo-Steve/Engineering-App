@@ -139,11 +139,6 @@ const MomentDistributionTable = ({
       </table>
 
       <ShearForceDiagram loads={loads} total={structure.totalRow} spans={spans} />
-      <MomentDistributionAndBMD
-        spans={spans}
-        loads={loads}
-        finalMoments={structure.totalRow}
-      />
     </div>
   );
 };
