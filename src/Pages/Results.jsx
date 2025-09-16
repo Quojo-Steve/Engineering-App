@@ -1,19 +1,22 @@
 import React from "react";
-import { useLocation } from "react-router-dom";
-import BeamDiagram from "./BeamDiagram";
+import { useLocation, useNavigate, Link } from "react-router-dom";
 import MomentDistributionTable from "./MomentDistributionTable";
-import ShearForceDiagram from "./ShearForceDiagram";
-import BendingMomentDiagram from "./BendingMomentDiagram";
 
 const Results = () => {
   const { state } = useLocation();
+  const navigate = useNavigate();
   const { formData, numIterations } = state || {};
 
   if (!state) {
     return <div>No data received. Please submit the form first.</div>;
   }
 
-  // Helper component to display any array of objects with units
+  const handleBack = () => {
+    navigate("/input-tables", {
+      state: { formData, numJoints: formData.joints.length, numIterations },
+    });
+  };
+
   const DisplayArray = ({ title, data }) => {
     if (!data || data.length === 0) return null;
 
@@ -51,7 +54,6 @@ const Results = () => {
             const shape = item.Cross_Section || item.CrossSection || "";
             const content = [];
 
-            // Show "Span: AB" if both from and to exist
             if (item.from && item.to) {
               content.push(
                 <p key="span">
@@ -155,11 +157,9 @@ const Results = () => {
     );
   };
 
-  // Helper component to display simple arrays (like supports)
   const DisplaySimpleArray = ({ title, data }) => {
     if (!data || data.length === 0) return null;
 
-    // Capitalize header
     const capitalizedTitle = title.replace(/\b\w/g, (char) =>
       char.toUpperCase()
     );
@@ -180,7 +180,15 @@ const Results = () => {
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-6">Analysis Results</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Analysis Results</h1>
+        <button
+          onClick={handleBack}
+          className="py-2 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition duration-300"
+        >
+          Back to Input Tables
+        </button>
+      </div>
 
       {formData.joints && (
         <DisplayArray title="Joints" data={formData.joints} />
@@ -215,26 +223,10 @@ const Results = () => {
           title="Distribution Factors"
           data={formData.distributionFactors.map((item) => ({
             ...item,
-            value: item.value === null ? "0" : item.value, // Handle null values
+            value: item.value === null ? "0" : item.value,
           }))}
         />
       )}
-
-      {/* Raw data view for debugging */}
-      {/* <details className="mt-8 border rounded-lg p-4">
-        <summary className="font-bold cursor-pointer">Raw Data</summary>
-        <pre className="bg-gray-100 p-4 mt-2 rounded overflow-x-auto">
-          {JSON.stringify(formData, null, 2)}
-        </pre>
-      </details> */}
-{/* 
-      <BeamDiagram
-        joints={formData.joints}
-        spans={formData.spans}
-        supports={formData.supports}
-        loads={formData.loads}
-        fixedEndMoments={formData.fixedEndMoments}
-      /> */}
 
       <MomentDistributionTable
         joints={formData.joints}
@@ -244,14 +236,6 @@ const Results = () => {
         loads={formData.loads}
         distributionFactors={formData.distributionFactors}
       />
-
-      
-
-      {/* <BendingMomentDiagram
-        spans={formData.spans}
-        loads={formData.loads}
-        fixedEndMoments={formData.fixedEndMoments}
-      /> */}
     </div>
   );
 };

@@ -11,11 +11,6 @@ import {
 } from "recharts";
 
 const BendingMomentDiagram = ({ forces, spans, loads }) => {
-  console.log("Forces:", forces);
-  console.log("Spans:", spans);
-  console.log("Loads:", loads);
-
-  // Calculate bending moments
   const calculateBendingMoments = () => {
     const moments = [];
     const jointNames = Object.keys(forces);
