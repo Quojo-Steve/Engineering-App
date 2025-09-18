@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import JointForm from "./JointForm";
 import SupportForm from "./SupportForm";
@@ -34,6 +34,25 @@ const InputTables = () => {
       crossSections: [],
     }
   );
+
+  // Determine if the Next/Submit button should be disabled based on the current step
+  const isNextButtonDisabled = useMemo(() => {
+    if (step === 1) {
+      return !formData.joints.every((joint) => joint.Label);
+    } else if (step === 2) {
+      // Support types are always pre-filled with "Roller", so button is always enabled
+      return false;
+    } else if (step === 3) {
+      return !formData.momentsOfInertia.every(
+        (moment) => moment.momentOfInertia > 0
+      );
+    } else if (step === 4) {
+      return !formData.spans.every((span) => span.value);
+    } else if (step === 5) {
+      return !formData.loads.every((load) => load.type && load.value);
+    }
+    return false;
+  }, [step, formData]);
 
   const nextStep = () => {
     if (step === 1) {
@@ -141,7 +160,13 @@ const InputTables = () => {
           </button>
           <button
             onClick={nextStep}
-            className="py-2 px-6 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition duration-300"
+            className={`py-2 px-6 rounded-lg transition duration-300 font-semibold 
+            ${
+              isNextButtonDisabled
+                ? "bg-gray-600 cursor-not-allowed text-gray-300"
+                : "bg-blue-600 hover:bg-blue-700 text-white"
+            }`}
+            disabled={isNextButtonDisabled}
           >
             {step === 5 ? "Submit" : "Next"}
           </button>

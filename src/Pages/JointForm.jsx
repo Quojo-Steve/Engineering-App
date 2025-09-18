@@ -2,8 +2,9 @@ import React from 'react';
 
 const handleJointChange = (index, field, value, formData, setFormData) => {
   const updatedJoints = [...formData.joints];
-  
+
   if (field === "label") {
+    // Check for unique label
     const labelExists = updatedJoints.some(
       (joint, i) => i !== index && joint.Label === value.toUpperCase()
     );
@@ -11,38 +12,33 @@ const handleJointChange = (index, field, value, formData, setFormData) => {
       alert("Joint labels must be unique.");
       return;
     }
+
+    // Update the current joint's label
     updatedJoints[index].Label = value.toUpperCase();
 
-    // Automatically connect to the next joint if it exists and has a label
-    if (index < updatedJoints.length - 1) {
-      const currentJoint = updatedJoints[index];
-      const nextJoint = updatedJoints[index + 1];
-      if (nextJoint.Label && currentJoint.Label) {
-        // Clear existing connections for current joint
-        currentJoint.Span_To = [];
-        // Connect to next joint
-        currentJoint.Span_To.push(nextJoint.Label);
-        // Update next joint's connections to include current joint
-        nextJoint.Span_To = nextJoint.Span_To.filter(
-          (conn) => conn !== currentJoint.Label
-        );
-        nextJoint.Span_To.push(currentJoint.Label);
+    // Clear connections for all joints to rebuild them correctly
+    updatedJoints.forEach((joint) => {
+      joint.Span_To = [];
+    });
+
+    // Rebuild connections for all joints to ensure linear chain
+    updatedJoints.forEach((joint, i) => {
+      const isStartJoint = i === 0;
+      const isEndJoint = i === updatedJoints.length - 1;
+
+      // Connect to previous joint (if not the start joint and previous joint has a label)
+      if (!isStartJoint && updatedJoints[i - 1].Label) {
+        joint.Span_To.push(updatedJoints[i - 1].Label);
       }
-    }
-    // Update previous joint's connection if it exists
-    if (index > 0) {
-      const prevJoint = updatedJoints[index - 1];
-      if (prevJoint.Label && updatedJoints[index].Label) {
-        prevJoint.Span_To = [updatedJoints[index].Label];
-        updatedJoints[index].Span_To = updatedJoints[index].Span_To.filter(
-          (conn) => conn !== prevJoint.Label
-        );
-        updatedJoints[index].Span_To.push(prevJoint.Label);
+
+      // Connect to next joint (if not the end joint and next joint has a label)
+      if (!isEndJoint && updatedJoints[i + 1].Label) {
+        joint.Span_To.push(updatedJoints[i + 1].Label);
       }
-    }
+    });
+
+    setFormData({ ...formData, joints: updatedJoints });
   }
-  
-  setFormData({ ...formData, joints: updatedJoints });
 };
 
 const JointForm = ({ formData, setFormData }) => {
